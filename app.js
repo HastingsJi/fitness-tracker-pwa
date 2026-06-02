@@ -1,4 +1,4 @@
-const storageKey = "fitness-tracker-v1";
+const storageKey = "fitness-tracker-v2";
 
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {
@@ -110,17 +110,10 @@ function defaultState() {
 }
 
 function loadState() {
-  const fallback = defaultState();
   try {
-    const saved = JSON.parse(localStorage.getItem(storageKey));
-    return {
-      ...fallback,
-      ...saved,
-      profile: { ...fallback.profile, ...saved?.profile },
-      goals: { ...fallback.goals, ...saved?.goals }
-    };
+    return JSON.parse(localStorage.getItem(storageKey)) || defaultState();
   } catch {
-    return fallback;
+    return defaultState();
   }
 }
 
