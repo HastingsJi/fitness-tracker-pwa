@@ -30,6 +30,7 @@ const foodDatabase = [
 const state = loadState();
 let activeDate = todayKey();
 let pendingPhoto = "";
+let pendingAnalysis = null;
 
 const els = {
   date: document.querySelector("#entry-date"),
@@ -43,6 +44,13 @@ const els = {
   fat: document.querySelector("#fat-input"),
   form: document.querySelector("#daily-form"),
   estimate: document.querySelector("#estimate-button"),
+  confirmMeal: document.querySelector("#confirm-meal-button"),
+  analysisPanel: document.querySelector("#analysis-panel"),
+  analysisSummary: document.querySelector("#analysis-summary"),
+  analysisChat: document.querySelector("#analysis-chat"),
+  correctionInput: document.querySelector("#correction-input"),
+  sendCorrection: document.querySelector("#send-correction-button"),
+  resetAnalysis: document.querySelector("#reset-analysis-button"),
   meals: document.querySelector("#meal-list"),
   history: document.querySelector("#history-table"),
   todayCalories: document.querySelector("#today-calories"),
@@ -362,6 +370,73 @@ function estimateFromText(text) {
   };
 }
 
+function createAnalysisDraft(text, photo, correction = "") {
+  const combinedText = [text, correction].filter(Boolean).join(" ");
+  const estimate = estimateFromText(combinedText);
+  const hasFoodMatch = estimate.matched.length > 0;
+  const hasPhoto = Boolean(photo);
+  const fallback = hasPhoto && !hasFoodMatch
+    ? { calories: 550, protein: 25, carbs: 60, fat: 22, matched: ["照片餐食 x 1"] }
+    : estimate;
+
+  return {
+    text: combinedText.trim() || (hasPhoto ? "照片餐食" : ""),
+    photo,
+    foods: fallback.matched,
+    calories: Math.round(fallback.calories),
+    protein: round(fallback.protein),
+    carbs: round(fallback.carbs),
+    fat: round(fallback.fat),
+    messages: [
+      {
+        role: "assistant",
+        text: hasFoodMatch
+          ? "我先按这些食物估算。你可以继续更正份量或食材。"
+          : hasPhoto
+            ? "我先按照片生成一个粗略草稿。你可以补充食材和份量。"
+            : "我需要更多食物信息才能估算。"
+      }
+    ]
+  };
+}
+
+function renderAnalysis() {
+  if (!pendingAnalysis) {
+    els.analysisPanel.hidden = true;
+    els.confirmMeal.disabled = true;
+    return;
+  }
+
+  els.analysisPanel.hidden = false;
+  els.confirmMeal.disabled = !pendingAnalysis.text && !pendingAnalysis.photo;
+  els.calories.value = pendingAnalysis.calories || "";
+  els.protein.value = pendingAnalysis.protein || "";
+  els.carbs.value = pendingAnalysis.carbs || "";
+  els.fat.value = pendingAnalysis.fat || "";
+
+  els.analysisSummary.innerHTML = `
+    <div class="analysis-macros">
+      <article><span>热量</span><strong>${pendingAnalysis.calories || 0}</strong><small>kcal</small></article>
+      <article><span>蛋白质</span><strong>${pendingAnalysis.protein || 0}</strong><small>g</small></article>
+      <article><span>碳水</span><strong>${pendingAnalysis.carbs || 0}</strong><small>g</small></article>
+      <article><span>脂肪</span><strong>${pendingAnalysis.fat || 0}</strong><small>g</small></article>
+    </div>
+    <div class="food-chips">
+      ${(pendingAnalysis.foods.length ? pendingAnalysis.foods : ["待确认"]).map((food) => `<span>${escapeHtml(food)}</span>`).join("")}
+    </div>
+  `;
+
+  els.analysisChat.innerHTML = pendingAnalysis.messages
+    .map((message) => `<div class="chat-message ${message.role}">${escapeHtml(message.text)}</div>`)
+    .join("");
+}
+
+function resetAnalysis() {
+  pendingAnalysis = null;
+  els.correctionInput.value = "";
+  renderAnalysis();
+}
+
 function readQuantityNearFood(text, alias, food) {
   const escaped = alias.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   const afterPattern = new RegExp(`${escaped}[\\u4e00-\\u9fa5a-zA-Z\\s]{0,2}(\\d+(?:\\.\\d+)?)(?:\\s*(g|克|ml|毫升|个|份|杯|片|勺))?`, "i");
@@ -582,6 +657,7 @@ function resetMealInputs() {
   els.photoPreview.removeAttribute("src");
   els.photoPreview.classList.remove("has-photo");
   pendingPhoto = "";
+  resetAnalysis();
 }
 
 function exportCsv() {
@@ -652,15 +728,37 @@ els.weight.addEventListener("change", () => {
 });
 
 els.estimate.addEventListener("click", () => {
-  const estimate = estimateFromText(els.mealText.value);
-  els.calories.value = Math.round(estimate.calories);
-  els.protein.value = estimate.protein;
-  els.carbs.value = estimate.carbs;
-  els.fat.value = estimate.fat;
-  if (!estimate.matched.length) {
-    els.mealText.placeholder = "没匹配到食物。可以试试：鸡胸肉150g 米饭200g 鸡蛋2个";
+  pendingAnalysis = createAnalysisDraft(els.mealText.value, pendingPhoto);
+  renderAnalysis();
+});
+
+els.mealText.addEventListener("input", () => {
+  if (pendingAnalysis) resetAnalysis();
+});
+
+els.sendCorrection.addEventListener("click", () => {
+  const correction = els.correctionInput.value.trim();
+  if (!correction || !pendingAnalysis) return;
+
+  const previousMessages = pendingAnalysis.messages;
+  pendingAnalysis = createAnalysisDraft(els.mealText.value, pendingPhoto, correction);
+  pendingAnalysis.messages = [
+    ...previousMessages,
+    { role: "user", text: correction },
+    { role: "assistant", text: "已按你的更正更新草稿。确认无误后再保存。" }
+  ];
+  els.correctionInput.value = "";
+  renderAnalysis();
+});
+
+els.correctionInput.addEventListener("keydown", (event) => {
+  if (event.key === "Enter") {
+    event.preventDefault();
+    els.sendCorrection.click();
   }
 });
+
+els.resetAnalysis.addEventListener("click", resetAnalysis);
 
 els.photoInput.addEventListener("change", () => {
   const file = els.photoInput.files?.[0];
@@ -670,6 +768,7 @@ els.photoInput.addEventListener("change", () => {
     pendingPhoto = String(reader.result);
     els.photoPreview.src = pendingPhoto;
     els.photoPreview.classList.add("has-photo");
+    if (pendingAnalysis) resetAnalysis();
   });
   reader.readAsDataURL(file);
 });
@@ -679,14 +778,30 @@ els.form.addEventListener("submit", (event) => {
   const day = getDay();
   if (els.weight.value) day.weight = decimalValue(els.weight.value);
 
-  const meal = {
-    id: crypto.randomUUID(),
+  if (!pendingAnalysis) {
+    pendingAnalysis = createAnalysisDraft(els.mealText.value, pendingPhoto);
+    renderAnalysis();
+    saveState();
+    return;
+  }
+
+  const source = pendingAnalysis || {
     text: els.mealText.value.trim(),
     calories: numberValue(els.calories.value),
     protein: numberValue(els.protein.value),
     carbs: numberValue(els.carbs.value),
     fat: numberValue(els.fat.value),
-    photo: pendingPhoto,
+    photo: pendingPhoto
+  };
+
+  const meal = {
+    id: crypto.randomUUID(),
+    text: source.text || els.mealText.value.trim(),
+    calories: numberValue(els.calories.value || source.calories),
+    protein: numberValue(els.protein.value || source.protein),
+    carbs: numberValue(els.carbs.value || source.carbs),
+    fat: numberValue(els.fat.value || source.fat),
+    photo: source.photo || pendingPhoto,
     createdAt: new Date().toISOString()
   };
 

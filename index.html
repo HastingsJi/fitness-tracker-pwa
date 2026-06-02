@@ -10,7 +10,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <link rel="manifest" href="manifest.json" />
     <link rel="apple-touch-icon" href="icons/icon-192.png" />
-    <link rel="stylesheet" href="styles.css?v=4" />
+    <link rel="stylesheet" href="styles.css?v=5" />
   </head>
   <body>
     <div class="app-shell">
@@ -173,10 +173,23 @@
               </div>
 
               <div class="action-row">
-                <button id="estimate-button" class="secondary-button" type="button">从文字估算</button>
-                <button class="primary-button" type="submit">保存</button>
+                <button id="estimate-button" class="secondary-button" type="button">分析</button>
+                <button class="primary-button" id="confirm-meal-button" type="submit" disabled>确认保存</button>
               </div>
             </form>
+
+            <section class="analysis-panel" id="analysis-panel" hidden>
+              <div class="panel-header">
+                <h2>确认餐食</h2>
+                <button class="text-button" id="reset-analysis-button" type="button">重新开始</button>
+              </div>
+              <div class="analysis-summary" id="analysis-summary"></div>
+              <div class="chat-log" id="analysis-chat"></div>
+              <div class="chat-row">
+                <input id="correction-input" type="text" placeholder="例如：米饭其实只有半碗，鸡胸肉大概120g" />
+                <button class="secondary-button" id="send-correction-button" type="button">发送</button>
+              </div>
+            </section>
           </section>
         </section>
 
@@ -329,6 +342,6 @@
       </form>
     </dialog>
 
-    <script src="app.js?v=6"></script>
+    <script src="app.js?v=8"></script>
   </body>
 </html>

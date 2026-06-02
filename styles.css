@@ -311,6 +311,94 @@ textarea:focus {
   align-items: stretch;
 }
 
+.analysis-panel {
+  display: grid;
+  gap: 14px;
+  margin-top: 18px;
+  padding-top: 18px;
+  border-top: 1px solid var(--line);
+}
+
+.analysis-panel[hidden] {
+  display: none;
+}
+
+.analysis-summary {
+  display: grid;
+  gap: 12px;
+}
+
+.analysis-macros {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.analysis-macros article {
+  display: grid;
+  gap: 4px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fbfcfa;
+}
+
+.analysis-macros span,
+.analysis-macros small {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.analysis-macros strong {
+  font-size: 22px;
+  line-height: 1;
+}
+
+.food-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.food-chips span {
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: var(--soft);
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 750;
+}
+
+.chat-log {
+  display: grid;
+  gap: 8px;
+}
+
+.chat-message {
+  max-width: 86%;
+  padding: 10px 12px;
+  border-radius: 8px;
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.chat-message.assistant {
+  justify-self: start;
+  background: var(--soft);
+}
+
+.chat-message.user {
+  justify-self: end;
+  background: var(--ink);
+  color: white;
+}
+
+.chat-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+}
+
 .photo-drop {
   display: grid;
   min-height: 148px;
@@ -721,9 +809,11 @@ dialog::backdrop {
 
   .quick-metrics,
   .macro-grid,
+  .analysis-macros,
   .upload-row,
   .setup-grid,
-  .result-grid {
+  .result-grid,
+  .chat-row {
     grid-template-columns: 1fr;
   }
 
