@@ -137,6 +137,11 @@ function numberValue(value) {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
+function decimalValue(value) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
 function round(value, digits = 1) {
   const factor = 10 ** digits;
   return Math.round(value * factor) / factor;
@@ -392,10 +397,10 @@ function render() {
 function renderGoals() {
   els.calorieGoalDisplay.textContent = state.goals.calories;
   els.proteinGoalDisplay.textContent = state.goals.protein;
-  els.weightGoalDisplay.textContent = Number(state.goals.targetWeight).toFixed(1);
+  els.weightGoalDisplay.textContent = state.goals.targetWeight;
   els.dashboardCalorieGoal.textContent = state.goals.calories;
   els.dashboardProteinGoal.textContent = state.goals.protein;
-  els.dashboardWeightGoal.textContent = Number(state.goals.targetWeight).toFixed(1);
+  els.dashboardWeightGoal.textContent = state.goals.targetWeight;
   els.goalCalories.value = state.goals.calories;
   els.goalProtein.value = state.goals.protein;
   els.goalWeight.value = state.goals.targetWeight;
@@ -651,7 +656,7 @@ els.date.addEventListener("change", () => {
 });
 
 els.weight.addEventListener("change", () => {
-  getDay().weight = els.weight.value ? round(numberValue(els.weight.value)) : null;
+  getDay().weight = els.weight.value ? decimalValue(els.weight.value) : null;
   if (els.weight.value) {
     state.profile.weight = els.weight.value;
   }
@@ -688,7 +693,7 @@ els.photoInput.addEventListener("change", () => {
 els.form.addEventListener("submit", (event) => {
   event.preventDefault();
   const day = getDay();
-  if (els.weight.value) day.weight = round(numberValue(els.weight.value));
+  if (els.weight.value) day.weight = decimalValue(els.weight.value);
 
   const meal = {
     id: crypto.randomUUID(),
@@ -727,7 +732,7 @@ document.querySelector("#edit-goals-button").addEventListener("click", () => {
 els.goalsForm.addEventListener("submit", () => {
   state.goals.calories = Math.max(1, Math.round(numberValue(els.goalCalories.value)));
   state.goals.protein = Math.max(1, Math.round(numberValue(els.goalProtein.value)));
-  state.goals.targetWeight = Math.max(1, round(numberValue(els.goalWeight.value)));
+  state.goals.targetWeight = Math.max(1, decimalValue(els.goalWeight.value) || 1);
   saveState();
   render();
 });
