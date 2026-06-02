@@ -277,7 +277,8 @@ label {
 }
 
 input,
-textarea {
+textarea,
+select {
   width: 100%;
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -286,7 +287,8 @@ textarea {
   outline: none;
 }
 
-input {
+input,
+select {
   min-height: 42px;
   padding: 0 12px;
 }
@@ -583,6 +585,60 @@ th {
   line-height: 1.55;
 }
 
+.goal-setup {
+  display: grid;
+  gap: 16px;
+}
+
+.setup-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.setup-result {
+  display: grid;
+  gap: 14px;
+  margin-top: 18px;
+}
+
+.result-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.result-grid article {
+  display: grid;
+  gap: 8px;
+  min-height: 132px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fbfcfa;
+}
+
+.result-grid span,
+.result-grid small {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.result-grid strong {
+  align-self: center;
+  font-size: 20px;
+  line-height: 1.15;
+}
+
+.setup-warning {
+  padding: 12px 14px;
+  border: 1px solid #f6c8a8;
+  border-radius: 8px;
+  background: #fff4ed;
+  color: #8a3d16;
+  font-weight: 700;
+}
+
 dialog {
   width: min(420px, calc(100vw - 32px));
   border: 1px solid var(--line);
@@ -658,6 +714,10 @@ dialog::backdrop {
   .dashboard-grid {
     grid-template-columns: 1fr;
   }
+
+  .result-grid {
+    grid-template-columns: 1fr 1fr;
+  }
 }
 
 @media (max-width: 620px) {
@@ -673,7 +733,9 @@ dialog::backdrop {
 
   .quick-metrics,
   .macro-grid,
-  .upload-row {
+  .upload-row,
+  .setup-grid,
+  .result-grid {
     grid-template-columns: 1fr;
   }
 

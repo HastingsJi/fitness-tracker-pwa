@@ -71,6 +71,17 @@ const els = {
   goalCalories: document.querySelector("#goal-calories-input"),
   goalProtein: document.querySelector("#goal-protein-input"),
   goalWeight: document.querySelector("#goal-weight-input"),
+  goalSetupForm: document.querySelector("#goal-setup-form"),
+  profileAge: document.querySelector("#profile-age"),
+  profileSex: document.querySelector("#profile-sex"),
+  profileHeight: document.querySelector("#profile-height"),
+  profileWeight: document.querySelector("#profile-weight"),
+  profileActivity: document.querySelector("#profile-activity"),
+  profileGoalMode: document.querySelector("#profile-goal-mode"),
+  profileTargetWeight: document.querySelector("#profile-target-weight"),
+  profilePace: document.querySelector("#profile-pace"),
+  suggestTarget: document.querySelector("#suggest-target-button"),
+  goalSetupResult: document.querySelector("#goal-setup-result"),
   trendNote: document.querySelector("#weight-trend-note"),
   chart: document.querySelector("#weight-chart"),
   todayLabel: document.querySelector("#today-label"),
@@ -79,6 +90,16 @@ const els = {
 
 function defaultState() {
   return {
+    profile: {
+      age: "",
+      sex: "male",
+      height: "",
+      weight: "",
+      activity: "1.2",
+      goalMode: "lose",
+      targetWeight: "",
+      pace: "0.5"
+    },
     goals: {
       calories: 2200,
       protein: 140,
@@ -91,7 +112,13 @@ function defaultState() {
 function loadState() {
   const fallback = defaultState();
   try {
-    return { ...fallback, ...JSON.parse(localStorage.getItem(storageKey)) };
+    const saved = JSON.parse(localStorage.getItem(storageKey));
+    return {
+      ...fallback,
+      ...saved,
+      profile: { ...fallback.profile, ...saved?.profile },
+      goals: { ...fallback.goals, ...saved?.goals }
+    };
   } catch {
     return fallback;
   }
@@ -132,6 +159,187 @@ function sumMeals(day) {
     }),
     { calories: 0, protein: 0, carbs: 0, fat: 0 }
   );
+}
+
+function bmiCategory(bmi) {
+  if (bmi < 18.5) return "偏轻";
+  if (bmi < 25) return "健康范围";
+  if (bmi < 30) return "超重";
+  return "肥胖范围";
+}
+
+function healthyWeightRange(heightCm) {
+  const heightM = heightCm / 100;
+  return {
+    min: round(18.5 * heightM * heightM),
+    max: round(24.9 * heightM * heightM),
+    middle: round(22 * heightM * heightM)
+  };
+}
+
+function calculateGoalPlan(profile) {
+  const age = numberValue(profile.age);
+  const height = numberValue(profile.height);
+  const weight = numberValue(profile.weight);
+  const targetWeight = numberValue(profile.targetWeight);
+  const activity = numberValue(profile.activity);
+  const pace = numberValue(profile.pace);
+
+  if (!age || !height || !weight || !targetWeight || !activity) {
+    return { error: "请先填写年龄、身高、当前体重、活动水平和目标体重。" };
+  }
+
+  const heightM = height / 100;
+  const bmi = round(weight / (heightM * heightM), 1);
+  const range = healthyWeightRange(height);
+  const sexOffset = profile.sex === "female" ? -161 : 5;
+  const bmr = Math.round(10 * weight + 6.25 * height - 5 * age + sexOffset);
+  const maintenance = Math.round(bmr * activity);
+  const direction = Math.sign(targetWeight - weight);
+  const mode = profile.goalMode;
+  const weeklyChange = mode === "maintain" ? 0 : pace * (mode === "gain" ? 1 : -1);
+  const kgToChange = Math.abs(targetWeight - weight);
+  const weeks = weeklyChange ? Math.ceil(kgToChange / Math.abs(weeklyChange)) : 0;
+  const dailyCalorieShift = weeklyChange ? Math.round((Math.abs(weeklyChange) * 7700) / 7) : 0;
+  let targetCalories = maintenance;
+
+  if (mode === "lose") targetCalories = maintenance - dailyCalorieShift;
+  if (mode === "gain") targetCalories = maintenance + Math.min(400, dailyCalorieShift);
+
+  const calorieFloor = profile.sex === "female" ? 1200 : 1500;
+  const adjustedForFloor = mode === "lose" && targetCalories < calorieFloor;
+  if (adjustedForFloor) targetCalories = calorieFloor;
+
+  const proteinGoal = Math.round(Math.max(1.6 * targetWeight, 1.2 * weight));
+  const reachDate = weeks ? addWeeks(new Date(), weeks) : null;
+  const directionMismatch =
+    (mode === "lose" && direction >= 0) ||
+    (mode === "gain" && direction <= 0) ||
+    (mode === "maintain" && kgToChange > 1);
+
+  return {
+    age,
+    height,
+    weight,
+    targetWeight,
+    bmi,
+    category: bmiCategory(bmi),
+    range,
+    bmr,
+    maintenance,
+    targetCalories,
+    proteinGoal,
+    weeks,
+    reachDate,
+    adjustedForFloor,
+    directionMismatch
+  };
+}
+
+function addWeeks(date, weeks) {
+  const copy = new Date(date);
+  copy.setDate(copy.getDate() + weeks * 7);
+  return copy.toISOString().slice(0, 10);
+}
+
+function readProfileForm() {
+  return {
+    age: els.profileAge.value,
+    sex: els.profileSex.value,
+    height: els.profileHeight.value,
+    weight: els.profileWeight.value,
+    activity: els.profileActivity.value,
+    goalMode: els.profileGoalMode.value,
+    targetWeight: els.profileTargetWeight.value,
+    pace: els.profilePace.value
+  };
+}
+
+function writeProfileForm() {
+  const profile = state.profile;
+  els.profileAge.value = profile.age;
+  els.profileSex.value = profile.sex;
+  els.profileHeight.value = profile.height;
+  els.profileWeight.value = profile.weight || getDay().weight || "";
+  els.profileActivity.value = profile.activity;
+  els.profileGoalMode.value = profile.goalMode;
+  els.profileTargetWeight.value = profile.targetWeight || state.goals.targetWeight || "";
+  els.profilePace.value = profile.pace;
+}
+
+function suggestTargetWeight() {
+  const profile = readProfileForm();
+  const height = numberValue(profile.height);
+  const weight = numberValue(profile.weight);
+  if (!height || !weight) return;
+
+  const range = healthyWeightRange(height);
+  if (profile.goalMode === "lose") {
+    els.profileTargetWeight.value = weight > range.max ? range.max : Math.max(range.min, round(weight * 0.95));
+  } else if (profile.goalMode === "gain") {
+    els.profileTargetWeight.value = weight < range.min ? range.min : round(weight * 1.05);
+  } else {
+    els.profileTargetWeight.value = weight;
+  }
+}
+
+function renderGoalSetupResult(plan) {
+  if (!plan || plan.error) {
+    els.goalSetupResult.innerHTML = plan?.error ? `<div class="empty-state">${plan.error}</div>` : "";
+    return;
+  }
+
+  const timeline = plan.weeks
+    ? `${plan.weeks} 周左右，预计 ${plan.reachDate}`
+    : "维持当前体重";
+  const warnings = [
+    plan.adjustedForFloor ? "目标速度会让热量过低，已自动提高到保守下限。" : "",
+    plan.directionMismatch ? "目标方向和目标体重不一致，请确认是否填反。" : ""
+  ].filter(Boolean);
+
+  els.goalSetupResult.innerHTML = `
+    <div class="result-grid">
+      <article>
+        <span>BMI</span>
+        <strong>${plan.bmi}</strong>
+        <small>${plan.category}</small>
+      </article>
+      <article>
+        <span>健康体重范围</span>
+        <strong>${plan.range.min}-${plan.range.max} kg</strong>
+        <small>按成人 BMI 18.5-24.9 估算</small>
+      </article>
+      <article>
+        <span>维持热量</span>
+        <strong>${plan.maintenance} kcal</strong>
+        <small>BMR ${plan.bmr} kcal × 活动水平</small>
+      </article>
+      <article>
+        <span>建议每日热量</span>
+        <strong>${plan.targetCalories} kcal</strong>
+        <small>蛋白质 ${plan.proteinGoal} g / 天</small>
+      </article>
+      <article>
+        <span>目标时间</span>
+        <strong>${timeline}</strong>
+        <small>实际会随体重变化调整</small>
+      </article>
+    </div>
+    ${warnings.length ? `<div class="setup-warning">${warnings.join(" ")}</div>` : ""}
+    <div class="action-row">
+      <button class="primary-button" id="apply-plan-button" type="button">应用到每日目标</button>
+    </div>
+  `;
+
+  document.querySelector("#apply-plan-button").addEventListener("click", () => {
+    state.goals.calories = plan.targetCalories;
+    state.goals.protein = plan.proteinGoal;
+    state.goals.targetWeight = plan.targetWeight;
+    state.profile = readProfileForm();
+    saveState();
+    render();
+    renderGoalSetupResult(plan);
+  });
 }
 
 function estimateFromText(text) {
@@ -180,6 +388,7 @@ function render() {
   els.date.value = activeDate;
   renderGoals();
   renderDayForm();
+  writeProfileForm();
   renderProgress();
   renderMeals();
   renderHistory();
@@ -450,10 +659,14 @@ els.date.addEventListener("change", () => {
 
 els.weight.addEventListener("change", () => {
   getDay().weight = els.weight.value ? round(numberValue(els.weight.value)) : null;
+  if (els.weight.value) {
+    state.profile.weight = els.weight.value;
+  }
   saveState();
   renderProgress();
   renderHistory();
   drawWeightChart();
+  writeProfileForm();
 });
 
 els.estimate.addEventListener("click", () => {
@@ -524,6 +737,18 @@ els.goalsForm.addEventListener("submit", () => {
   state.goals.targetWeight = Math.max(1, round(numberValue(els.goalWeight.value)));
   saveState();
   render();
+});
+
+els.suggestTarget.addEventListener("click", () => {
+  suggestTargetWeight();
+});
+
+els.goalSetupForm.addEventListener("submit", (event) => {
+  event.preventDefault();
+  state.profile = readProfileForm();
+  const plan = calculateGoalPlan(state.profile);
+  saveState();
+  renderGoalSetupResult(plan);
 });
 
 document.querySelector("#clear-day-button").addEventListener("click", () => {
