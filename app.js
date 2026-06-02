@@ -45,7 +45,6 @@ const els = {
   estimate: document.querySelector("#estimate-button"),
   meals: document.querySelector("#meal-list"),
   history: document.querySelector("#history-table"),
-  foodGrid: document.querySelector("#food-grid"),
   todayCalories: document.querySelector("#today-calories"),
   todayProtein: document.querySelector("#today-protein"),
   latestWeight: document.querySelector("#latest-weight"),
@@ -390,7 +389,6 @@ function render() {
   renderProgress();
   renderMeals();
   renderHistory();
-  renderFoods();
   drawWeightChart();
 }
 
@@ -445,7 +443,7 @@ function latestWeightLabel() {
 function renderMeals() {
   const day = getDay();
   if (!day.meals.length) {
-    els.meals.innerHTML = `<div class="empty-state">还没有餐食记录。可以输入文字估算，或添加照片后手动保存营养。</div>`;
+    els.meals.innerHTML = `<div class="empty-state">还没有记录</div>`;
     return;
   }
 
@@ -488,20 +486,6 @@ function renderHistory() {
   els.history.innerHTML = rows.join("") || `<tr><td colspan="5">暂无历史记录</td></tr>`;
 }
 
-function renderFoods() {
-  els.foodGrid.innerHTML = foodDatabase
-    .map(
-      (food) => `
-        <article class="food-card">
-          <strong>${food.name}</strong>
-          <span>每 ${food.unit}</span>
-          <span>${food.calories} kcal · P ${food.protein}g · C ${food.carbs}g · F ${food.fat}g</span>
-        </article>
-      `
-    )
-    .join("");
-}
-
 function drawWeightChart() {
   const ctx = els.chart.getContext("2d");
   const points = Object.entries(state.days)
@@ -518,7 +502,7 @@ function drawWeightChart() {
     els.trendNote.textContent = points.length ? "再记录一天即可生成趋势" : "暂无数据";
     ctx.fillStyle = "#6e7771";
     ctx.font = "18px system-ui";
-    ctx.fillText("记录至少两天体重后显示趋势", 32, height / 2);
+    ctx.fillText("记录两天后显示趋势", 32, height / 2);
     return;
   }
 
@@ -640,7 +624,7 @@ function showView(viewId) {
   view.classList.add("active");
   els.viewTitle.textContent = view.dataset.title || "Fitness";
 
-  if (viewId === "weight-view") {
+  if (viewId === "trend-view") {
     drawWeightChart();
   }
 }
