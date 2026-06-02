@@ -370,7 +370,36 @@ function estimateFromText(text) {
   };
 }
 
-function createAnalysisDraft(text, photo, correction = "") {
+async function createAnalysisDraft(text, photo, correction = "") {
+  const serverDraft = await requestMealAnalysis(text, photo, correction).catch(() => null);
+  if (serverDraft) {
+    return {
+      text: serverDraft.text,
+      photo,
+      foods: serverDraft.foods || [],
+      calories: serverDraft.calories,
+      protein: serverDraft.protein,
+      carbs: serverDraft.carbs,
+      fat: serverDraft.fat,
+      messages: [{ role: "assistant", text: serverDraft.message }]
+    };
+  }
+
+  return createLocalAnalysisDraft(text, photo, correction);
+}
+
+async function requestMealAnalysis(text, photo, correction = "") {
+  const response = await fetch(photo ? "/api/analyze-meal-photo" : "/api/analyze-meal-text", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ text, correction, photo: photo || null })
+  });
+
+  if (!response.ok) throw new Error("analysis_failed");
+  return response.json();
+}
+
+function createLocalAnalysisDraft(text, photo, correction = "") {
   const combinedText = [text, correction].filter(Boolean).join(" ");
   const estimate = estimateFromText(combinedText);
   const hasFoodMatch = estimate.matched.length > 0;
@@ -728,8 +757,13 @@ els.weight.addEventListener("change", () => {
 });
 
 els.estimate.addEventListener("click", () => {
-  pendingAnalysis = createAnalysisDraft(els.mealText.value, pendingPhoto);
+  pendingAnalysis = createLocalAnalysisDraft("", null);
+  pendingAnalysis.messages = [{ role: "assistant", text: "分析中..." }];
   renderAnalysis();
+  createAnalysisDraft(els.mealText.value, pendingPhoto).then((draft) => {
+    pendingAnalysis = draft;
+    renderAnalysis();
+  });
 });
 
 els.mealText.addEventListener("input", () => {
@@ -741,14 +775,25 @@ els.sendCorrection.addEventListener("click", () => {
   if (!correction || !pendingAnalysis) return;
 
   const previousMessages = pendingAnalysis.messages;
-  pendingAnalysis = createAnalysisDraft(els.mealText.value, pendingPhoto, correction);
   pendingAnalysis.messages = [
     ...previousMessages,
     { role: "user", text: correction },
-    { role: "assistant", text: "已按你的更正更新草稿。确认无误后再保存。" }
+    { role: "assistant", text: "更新中..." }
   ];
   els.correctionInput.value = "";
   renderAnalysis();
+
+  createAnalysisDraft(els.mealText.value, pendingPhoto, correction).then((draft) => {
+    pendingAnalysis = {
+      ...draft,
+      messages: [
+        ...previousMessages,
+        { role: "user", text: correction },
+        { role: "assistant", text: "已按你的更正更新草稿。确认无误后再保存。" }
+      ]
+    };
+    renderAnalysis();
+  });
 });
 
 els.correctionInput.addEventListener("keydown", (event) => {
@@ -779,9 +824,14 @@ els.form.addEventListener("submit", (event) => {
   if (els.weight.value) day.weight = decimalValue(els.weight.value);
 
   if (!pendingAnalysis) {
-    pendingAnalysis = createAnalysisDraft(els.mealText.value, pendingPhoto);
+    pendingAnalysis = createLocalAnalysisDraft("", null);
+    pendingAnalysis.messages = [{ role: "assistant", text: "分析中..." }];
     renderAnalysis();
-    saveState();
+    createAnalysisDraft(els.mealText.value, pendingPhoto).then((draft) => {
+      pendingAnalysis = draft;
+      renderAnalysis();
+      saveState();
+    });
     return;
   }
 
