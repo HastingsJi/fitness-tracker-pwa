@@ -19,119 +19,76 @@
           <div class="brand-mark">F</div>
           <div>
             <h1>Fitness</h1>
-            <p>每日体重与营养追踪</p>
+            <p>无广告饮食追踪</p>
           </div>
         </div>
 
         <section class="panel goals-panel">
           <div class="panel-header">
-            <h2>目标</h2>
-            <button class="icon-button" id="edit-goals-button" type="button" aria-label="编辑目标" title="编辑目标">
-              <span aria-hidden="true">✎</span>
-            </button>
+            <h2>今日</h2>
+            <input id="entry-date" type="date" aria-label="选择日期" />
           </div>
-          <dl class="goal-list">
+          <dl class="goal-list compact-stats">
             <div>
-              <dt>每日热量</dt>
-              <dd><span id="calorie-goal-display">2200</span> kcal</dd>
+              <dt>热量</dt>
+              <dd><span id="today-calories">0</span> kcal</dd>
             </div>
             <div>
               <dt>蛋白质</dt>
-              <dd><span id="protein-goal-display">140</span> g</dd>
+              <dd><span id="today-protein">0g</span></dd>
             </div>
             <div>
-              <dt>目标体重</dt>
-              <dd><span id="weight-goal-display">70.0</span> kg</dd>
+              <dt>体重</dt>
+              <dd><span id="latest-weight">--</span></dd>
             </div>
           </dl>
         </section>
 
         <nav class="nav-tabs" aria-label="视图切换">
-          <button class="nav-tab active" type="button" data-view="today-view">今天</button>
-          <button class="nav-tab" type="button" data-view="history-view">趋势</button>
+          <button class="nav-tab active" type="button" data-view="dashboard-view">总览</button>
+          <button class="nav-tab" type="button" data-view="meal-view">记餐</button>
+          <button class="nav-tab" type="button" data-view="weight-view">体重</button>
+          <button class="nav-tab" type="button" data-view="history-view">历史</button>
           <button class="nav-tab" type="button" data-view="foods-view">食物库</button>
+          <button class="nav-tab" type="button" data-view="settings-view">设置</button>
         </nav>
       </aside>
 
       <main>
-        <section class="hero-band">
+        <header class="app-header">
           <div>
             <p class="eyebrow" id="today-label">今天</p>
-            <h2>把体重、饮食和照片都放在同一个节奏里。</h2>
+            <h2 id="view-title">总览</h2>
           </div>
-          <div class="quick-metrics" aria-label="今日摘要">
-            <div>
-              <span id="today-calories">0</span>
-              <small>kcal</small>
-            </div>
-            <div>
-              <span id="today-protein">0g</span>
-              <small>蛋白质</small>
-            </div>
-            <div>
-              <span id="latest-weight">--</span>
-              <small>最新体重</small>
-            </div>
+          <div class="header-actions">
+            <button class="secondary-button view-shortcut" type="button" data-view="meal-view">记一餐</button>
+            <button class="secondary-button view-shortcut" type="button" data-view="weight-view">记体重</button>
           </div>
-        </section>
+        </header>
 
-        <section class="view active" id="today-view">
+        <section class="view active" id="dashboard-view" data-title="总览">
+          <section class="dashboard-grid">
+            <article class="metric-tile">
+              <span>今日热量</span>
+              <strong><span id="dashboard-calories">0</span> kcal</strong>
+              <small>目标 <span id="dashboard-calorie-goal">2200</span> kcal</small>
+            </article>
+            <article class="metric-tile">
+              <span>蛋白质</span>
+              <strong><span id="dashboard-protein">0g</span></strong>
+              <small>目标 <span id="dashboard-protein-goal">140</span> g</small>
+            </article>
+            <article class="metric-tile">
+              <span>最新体重</span>
+              <strong id="dashboard-weight">--</strong>
+              <small>目标 <span id="dashboard-weight-goal">70.0</span> kg</small>
+            </article>
+          </section>
+
           <div class="content-grid">
-            <section class="panel log-panel">
-              <div class="panel-header">
-                <h2>今日记录</h2>
-                <input id="entry-date" type="date" />
-              </div>
-
-              <form id="daily-form" class="stack">
-                <label>
-                  <span>体重 kg</span>
-                  <input id="weight-input" inputmode="decimal" min="0" step="0.1" type="number" placeholder="例如 72.4" />
-                </label>
-
-                <label>
-                  <span>餐食文字</span>
-                  <textarea id="meal-text" rows="4" placeholder="例如：早餐 鸡蛋2个、燕麦50g、牛奶250ml"></textarea>
-                </label>
-
-                <div class="upload-row">
-                  <label class="photo-drop" for="food-photo">
-                    <input id="food-photo" accept="image/*" capture="environment" type="file" />
-                    <span>＋</span>
-                    <strong>添加食物照片</strong>
-                  </label>
-                  <img id="photo-preview" alt="食物照片预览" />
-                </div>
-
-                <div class="macro-grid">
-                  <label>
-                    <span>热量 kcal</span>
-                    <input id="calories-input" inputmode="numeric" min="0" type="number" />
-                  </label>
-                  <label>
-                    <span>蛋白质 g</span>
-                    <input id="protein-input" inputmode="decimal" min="0" step="0.1" type="number" />
-                  </label>
-                  <label>
-                    <span>碳水 g</span>
-                    <input id="carbs-input" inputmode="decimal" min="0" step="0.1" type="number" />
-                  </label>
-                  <label>
-                    <span>脂肪 g</span>
-                    <input id="fat-input" inputmode="decimal" min="0" step="0.1" type="number" />
-                  </label>
-                </div>
-
-                <div class="action-row">
-                  <button id="estimate-button" class="secondary-button" type="button">从文字估算</button>
-                  <button class="primary-button" type="submit">保存记录</button>
-                </div>
-              </form>
-            </section>
-
             <section class="panel progress-panel">
               <div class="panel-header">
-                <h2>今日进度</h2>
+                <h2>进度</h2>
                 <button class="text-button" id="export-button" type="button">导出 CSV</button>
               </div>
               <div class="ring-wrap">
@@ -164,26 +121,90 @@
                 </div>
               </div>
             </section>
-          </div>
 
-          <section class="panel">
+            <section class="panel">
+              <div class="panel-header">
+                <h2>今日餐食</h2>
+                <button class="text-button danger" id="clear-day-button" type="button">清空当天</button>
+              </div>
+              <div class="meal-list" id="meal-list"></div>
+            </section>
+          </div>
+        </section>
+
+        <section class="view" id="meal-view" data-title="记餐">
+          <section class="panel log-panel">
             <div class="panel-header">
-              <h2>今日餐食</h2>
-              <button class="text-button danger" id="clear-day-button" type="button">清空当天</button>
+              <h2>添加餐食</h2>
+              <span class="muted">文字或照片都可以</span>
             </div>
-            <div class="meal-list" id="meal-list"></div>
+
+            <form id="daily-form" class="stack">
+              <label>
+                <span>餐食文字</span>
+                <textarea id="meal-text" rows="5" placeholder="例如：午餐 鸡胸肉150g 米饭200g 鸡蛋2个"></textarea>
+              </label>
+
+              <div class="upload-row">
+                <label class="photo-drop" for="food-photo">
+                  <input id="food-photo" accept="image/*" capture="environment" type="file" />
+                  <span>＋</span>
+                  <strong>添加食物照片</strong>
+                </label>
+                <img id="photo-preview" alt="食物照片预览" />
+              </div>
+
+              <div class="macro-grid">
+                <label>
+                  <span>热量 kcal</span>
+                  <input id="calories-input" inputmode="numeric" min="0" type="number" />
+                </label>
+                <label>
+                  <span>蛋白质 g</span>
+                  <input id="protein-input" inputmode="decimal" min="0" step="0.1" type="number" />
+                </label>
+                <label>
+                  <span>碳水 g</span>
+                  <input id="carbs-input" inputmode="decimal" min="0" step="0.1" type="number" />
+                </label>
+                <label>
+                  <span>脂肪 g</span>
+                  <input id="fat-input" inputmode="decimal" min="0" step="0.1" type="number" />
+                </label>
+              </div>
+
+              <div class="action-row">
+                <button id="estimate-button" class="secondary-button" type="button">从文字估算</button>
+                <button class="primary-button" type="submit">保存餐食</button>
+              </div>
+            </form>
           </section>
         </section>
 
-        <section class="view" id="history-view">
-          <section class="panel">
-            <div class="panel-header">
-              <h2>体重趋势</h2>
-              <span class="muted" id="weight-trend-note">暂无数据</span>
-            </div>
-            <canvas id="weight-chart" width="900" height="320"></canvas>
-          </section>
+        <section class="view" id="weight-view" data-title="体重">
+          <div class="content-grid">
+            <section class="panel">
+              <div class="panel-header">
+                <h2>记录体重</h2>
+                <span class="muted">每天一次就够</span>
+              </div>
+              <label>
+                <span>体重 kg</span>
+                <input id="weight-input" inputmode="decimal" min="0" step="0.1" type="number" placeholder="例如 72.4" />
+              </label>
+            </section>
 
+            <section class="panel">
+              <div class="panel-header">
+                <h2>体重趋势</h2>
+                <span class="muted" id="weight-trend-note">暂无数据</span>
+              </div>
+              <canvas id="weight-chart" width="900" height="320"></canvas>
+            </section>
+          </div>
+        </section>
+
+        <section class="view" id="history-view" data-title="历史">
           <section class="panel">
             <div class="panel-header">
               <h2>历史记录</h2>
@@ -206,13 +227,38 @@
           </section>
         </section>
 
-        <section class="view" id="foods-view">
+        <section class="view" id="foods-view" data-title="食物库">
           <section class="panel">
             <div class="panel-header">
               <h2>可识别食物</h2>
               <span class="muted">文字估算会匹配这些关键词</span>
             </div>
             <div class="food-grid" id="food-grid"></div>
+          </section>
+        </section>
+
+        <section class="view" id="settings-view" data-title="设置">
+          <section class="panel">
+            <div class="panel-header">
+              <h2>目标</h2>
+              <button class="icon-button" id="edit-goals-button" type="button" aria-label="编辑目标" title="编辑目标">
+                <span aria-hidden="true">✎</span>
+              </button>
+            </div>
+            <dl class="goal-list">
+              <div>
+                <dt>每日热量</dt>
+                <dd><span id="calorie-goal-display">2200</span> kcal</dd>
+              </div>
+              <div>
+                <dt>蛋白质</dt>
+                <dd><span id="protein-goal-display">140</span> g</dd>
+              </div>
+              <div>
+                <dt>目标体重</dt>
+                <dd><span id="weight-goal-display">70.0</span> kg</dd>
+              </div>
+            </dl>
           </section>
         </section>
       </main>

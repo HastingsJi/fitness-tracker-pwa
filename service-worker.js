@@ -1,4 +1,4 @@
-const cacheName = "fitness-pwa-v1";
+const cacheName = "fitness-pwa-v2";
 const appShell = [
   "./",
   "./index.html",

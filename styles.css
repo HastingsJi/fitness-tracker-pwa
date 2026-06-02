@@ -98,30 +98,30 @@ main {
   padding: 28px;
 }
 
-.hero-band {
+.app-header {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
-  gap: 24px;
-  align-items: end;
-  min-height: 220px;
-  margin: -28px -28px 24px;
-  padding: 34px 28px;
-  color: white;
-  background:
-    linear-gradient(90deg, rgba(14, 31, 27, 0.82), rgba(14, 31, 27, 0.28)),
-    url("https://images.unsplash.com/photo-1490645935967-10de6ba17061?auto=format&fit=crop&w=1600&q=80") center/cover;
+  gap: 18px;
+  align-items: center;
+  margin-bottom: 22px;
 }
 
-.hero-band h2 {
-  max-width: 760px;
+.app-header h2 {
   margin-top: 8px;
-  font-size: clamp(30px, 5vw, 56px);
+  font-size: clamp(30px, 4vw, 48px);
   letter-spacing: 0;
 }
 
 .eyebrow {
   font-weight: 700;
-  color: rgba(255, 255, 255, 0.76);
+  color: var(--accent);
+}
+
+.header-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 10px;
 }
 
 .quick-metrics {
@@ -223,6 +223,38 @@ dd {
 .view.active {
   display: grid;
   gap: 20px;
+}
+
+.dashboard-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.metric-tile {
+  display: grid;
+  gap: 8px;
+  min-height: 138px;
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+.metric-tile span,
+.metric-tile small {
+  color: var(--muted);
+}
+
+.metric-tile strong {
+  align-self: center;
+  font-size: 30px;
+  line-height: 1.05;
+}
+
+.metric-tile strong span {
+  color: var(--ink);
 }
 
 .content-grid {
@@ -586,28 +618,57 @@ dialog::backdrop {
     padding: 18px;
   }
 
+  .nav-tabs {
+    position: fixed;
+    z-index: 10;
+    right: 12px;
+    bottom: 12px;
+    left: 12px;
+    grid-template-columns: repeat(6, 1fr);
+    gap: 4px;
+    margin: 0;
+    padding: 6px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.94);
+    box-shadow: var(--shadow);
+    backdrop-filter: blur(16px);
+  }
+
+  .nav-tab {
+    min-height: 44px;
+    padding: 6px 4px;
+    text-align: center;
+    font-size: 12px;
+  }
+
   main {
-    padding: 18px;
+    padding: 18px 18px 88px;
   }
 
-  .hero-band {
+  .app-header {
     grid-template-columns: 1fr;
-    margin: -18px -18px 18px;
-    min-height: 300px;
-  }
-
-  .quick-metrics {
-    min-width: 0;
+    align-items: start;
   }
 
   .content-grid {
     grid-template-columns: 1fr;
   }
+
+  .dashboard-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 @media (max-width: 620px) {
-  .hero-band h2 {
+  .app-header h2 {
     font-size: 34px;
+  }
+
+  .header-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    width: 100%;
   }
 
   .quick-metrics,

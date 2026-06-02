@@ -57,6 +57,12 @@ const els = {
   proteinProgress: document.querySelector("#protein-progress-label"),
   carbsProgress: document.querySelector("#carbs-progress-label"),
   fatProgress: document.querySelector("#fat-progress-label"),
+  dashboardCalories: document.querySelector("#dashboard-calories"),
+  dashboardProtein: document.querySelector("#dashboard-protein"),
+  dashboardWeight: document.querySelector("#dashboard-weight"),
+  dashboardCalorieGoal: document.querySelector("#dashboard-calorie-goal"),
+  dashboardProteinGoal: document.querySelector("#dashboard-protein-goal"),
+  dashboardWeightGoal: document.querySelector("#dashboard-weight-goal"),
   calorieGoalDisplay: document.querySelector("#calorie-goal-display"),
   proteinGoalDisplay: document.querySelector("#protein-goal-display"),
   weightGoalDisplay: document.querySelector("#weight-goal-display"),
@@ -67,7 +73,8 @@ const els = {
   goalWeight: document.querySelector("#goal-weight-input"),
   trendNote: document.querySelector("#weight-trend-note"),
   chart: document.querySelector("#weight-chart"),
-  todayLabel: document.querySelector("#today-label")
+  todayLabel: document.querySelector("#today-label"),
+  viewTitle: document.querySelector("#view-title")
 };
 
 function defaultState() {
@@ -184,6 +191,9 @@ function renderGoals() {
   els.calorieGoalDisplay.textContent = state.goals.calories;
   els.proteinGoalDisplay.textContent = state.goals.protein;
   els.weightGoalDisplay.textContent = Number(state.goals.targetWeight).toFixed(1);
+  els.dashboardCalorieGoal.textContent = state.goals.calories;
+  els.dashboardProteinGoal.textContent = state.goals.protein;
+  els.dashboardWeightGoal.textContent = Number(state.goals.targetWeight).toFixed(1);
   els.goalCalories.value = state.goals.calories;
   els.goalProtein.value = state.goals.protein;
   els.goalWeight.value = state.goals.targetWeight;
@@ -205,6 +215,9 @@ function renderProgress() {
   els.todayCalories.textContent = Math.round(totals.calories);
   els.todayProtein.textContent = `${round(totals.protein)}g`;
   els.latestWeight.textContent = latestWeightLabel();
+  els.dashboardCalories.textContent = Math.round(totals.calories);
+  els.dashboardProtein.textContent = `${round(totals.protein)}g`;
+  els.dashboardWeight.textContent = latestWeightLabel();
   els.calorieRing.style.setProperty("--percent", `${Math.min(100, caloriePercent)}%`);
   els.caloriePercent.textContent = `${caloriePercent}%`;
   els.proteinBar.style.width = `${proteinPercent}%`;
@@ -411,13 +424,22 @@ function csvCell(value) {
   return /[",\n]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text;
 }
 
-document.querySelectorAll(".nav-tab").forEach((button) => {
-  button.addEventListener("click", () => {
-    document.querySelectorAll(".nav-tab, .view").forEach((node) => node.classList.remove("active"));
-    button.classList.add("active");
-    document.querySelector(`#${button.dataset.view}`).classList.add("active");
-    if (button.dataset.view === "history-view") drawWeightChart();
-  });
+function showView(viewId) {
+  const view = document.querySelector(`#${viewId}`);
+  if (!view) return;
+
+  document.querySelectorAll(".view").forEach((node) => node.classList.remove("active"));
+  document.querySelectorAll(".nav-tab").forEach((node) => node.classList.toggle("active", node.dataset.view === viewId));
+  view.classList.add("active");
+  els.viewTitle.textContent = view.dataset.title || "Fitness";
+
+  if (viewId === "weight-view") {
+    drawWeightChart();
+  }
+}
+
+document.querySelectorAll("[data-view]").forEach((button) => {
+  button.addEventListener("click", () => showView(button.dataset.view));
 });
 
 els.date.addEventListener("change", () => {
@@ -480,6 +502,7 @@ els.form.addEventListener("submit", (event) => {
   saveState();
   resetMealInputs();
   render();
+  showView("dashboard-view");
 });
 
 els.meals.addEventListener("click", (event) => {
