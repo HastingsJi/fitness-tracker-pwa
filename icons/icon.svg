@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title">
+  <title>Fitness Tracker icon</title>
+  <rect width="512" height="512" rx="96" fill="#167a68"/>
+  <path fill="#f6f7f2" d="M152 125h208c26 0 47 21 47 47v168c0 26-21 47-47 47H152c-26 0-47-21-47-47V172c0-26 21-47 47-47Zm0 42c-3 0-5 2-5 5v168c0 3 2 5 5 5h208c3 0 5-2 5-5V172c0-3-2-5-5-5H152Z"/>
+  <path fill="#f6f7f2" d="M183 249c10 0 17 8 17 17v29h39V216c0-10 8-17 17-17s17 8 17 17v79h39v-50c0-10 8-17 17-17s17 8 17 17v67c0 10-8 17-17 17H183c-10 0-17-8-17-17v-46c0-10 8-17 17-17Z"/>
+  <path fill="#e56f3f" d="M256 186c18 0 32-14 32-32h-64c0 18 14 32 32 32Z"/>
+</svg>
