@@ -341,10 +341,19 @@ async function createAnalysisDraft(text, hasPhoto, correction = "", photo = "") 
   const fallback = hasPhoto && !hasFoodMatch
     ? { calories: 550, protein: 25, carbs: 60, fat: 22, matched: ["照片餐食 x 1"] }
     : estimate;
+  const fallbackItems = fallback.matched.map((food) => ({
+    name: food,
+    amount: "",
+    calories: 0,
+    protein: 0,
+    carbs: 0,
+    fat: 0
+  }));
 
   return {
     text: combinedText.trim() || (hasPhoto ? "照片餐食" : ""),
     foods: fallback.matched,
+    items: fallbackItems,
     calories: Math.round(fallback.calories),
     protein: round(fallback.protein),
     carbs: round(fallback.carbs),
@@ -402,6 +411,7 @@ async function createOpenAIAnalysisDraft(text, hasPhoto, correction, photos) {
         "目标是帮用户生成可编辑的餐食草稿，而不是医疗建议。",
         "识别食物时保留不确定性：不确定就写进 message。",
         "foods 使用短标签，例如 鸡胸肉 150g、米饭 200g、鸡蛋 2个。",
+        "items 列出每一种你认为用户吃了的食物，包含 name、amount、calories、protein、carbs、fat，方便用户逐项确认。",
         "calories、protein、carbs、fat、fiber、sodium、potassium、calcium、iron 必须是非负数字。"
       ].join("\n"),
       input: [{ role: "user", content }],
@@ -429,12 +439,28 @@ async function createOpenAIAnalysisDraft(text, hasPhoto, correction, photos) {
 const mealAnalysisSchema = {
   type: "object",
   additionalProperties: false,
-  required: ["text", "foods", "calories", "protein", "carbs", "fat", "fiber", "sodium", "potassium", "calcium", "iron", "message"],
+  required: ["text", "foods", "items", "calories", "protein", "carbs", "fat", "fiber", "sodium", "potassium", "calcium", "iron", "message"],
   properties: {
     text: { type: "string" },
     foods: {
       type: "array",
       items: { type: "string" }
+    },
+    items: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: ["name", "amount", "calories", "protein", "carbs", "fat"],
+        properties: {
+          name: { type: "string" },
+          amount: { type: "string" },
+          calories: { type: "number" },
+          protein: { type: "number" },
+          carbs: { type: "number" },
+          fat: { type: "number" }
+        }
+      }
     },
     calories: { type: "number" },
     protein: { type: "number" },
@@ -459,9 +485,14 @@ function readResponseOutputText(payload) {
 
 function normalizeOpenAIAnalysis(parsed, text, hasPhoto) {
   const foods = Array.isArray(parsed.foods) ? parsed.foods.filter(Boolean).map(String) : [];
+  const items = Array.isArray(parsed.items)
+    ? parsed.items.map(normalizeFoodItem).filter(Boolean)
+    : foods.map((food) => normalizeFoodItem({ name: food, amount: "", calories: 0, protein: 0, carbs: 0, fat: 0 })).filter(Boolean);
+
   return {
     text: String(parsed.text || text || (hasPhoto ? "照片餐食" : "")).trim(),
     foods,
+    items,
     calories: Math.max(0, Math.round(Number(parsed.calories) || 0)),
     protein: round(Math.max(0, Number(parsed.protein) || 0)),
     carbs: round(Math.max(0, Number(parsed.carbs) || 0)),
@@ -474,6 +505,21 @@ function normalizeOpenAIAnalysis(parsed, text, hasPhoto) {
     source: "ai",
     warning: "",
     message: String(parsed.message || "我先生成了一个餐食估算，请确认食材和份量。")
+  };
+}
+
+function normalizeFoodItem(item) {
+  if (!item || typeof item !== "object") return null;
+  const name = String(item.name || "").trim();
+  if (!name) return null;
+
+  return {
+    name,
+    amount: String(item.amount || "").trim(),
+    calories: Math.max(0, Math.round(Number(item.calories) || 0)),
+    protein: round(Math.max(0, Number(item.protein) || 0)),
+    carbs: round(Math.max(0, Number(item.carbs) || 0)),
+    fat: round(Math.max(0, Number(item.fat) || 0))
   };
 }
 

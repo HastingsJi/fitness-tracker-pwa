@@ -463,6 +463,56 @@ textarea:focus {
   font-weight: 750;
 }
 
+.food-breakdown {
+  display: grid;
+  gap: 8px;
+}
+
+.breakdown-title {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 850;
+}
+
+.food-breakdown-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  padding: 11px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+}
+
+.food-breakdown-item div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.food-breakdown-item strong {
+  overflow-wrap: anywhere;
+  font-size: 14px;
+}
+
+.food-breakdown-item span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.food-breakdown-item b {
+  color: var(--accent);
+  font-size: 14px;
+  white-space: nowrap;
+}
+
+.confirm-analysis-button {
+  width: 100%;
+  min-height: 48px;
+}
+
 .chat-log {
   display: grid;
   gap: 8px;

@@ -574,6 +574,7 @@ async function createAnalysisDraft(text, photos, correction = "") {
       photo: primaryPhoto(normalizedPhotos),
       photos: normalizedPhotos,
       foods: serverDraft.foods || [],
+      items: normalizeFoodItems(serverDraft.items || serverDraft.foods || []),
       calories: serverDraft.calories,
       protein: serverDraft.protein,
       carbs: serverDraft.carbs,
@@ -622,12 +623,21 @@ function createLocalAnalysisDraft(text, photos, correction = "") {
   const fallback = hasPhoto && !hasFoodMatch
     ? { calories: 550, protein: 25, carbs: 60, fat: 22, matched: ["照片餐食 x 1"] }
     : estimate;
+  const items = fallback.matched.map((food) => ({
+    name: food,
+    amount: "",
+    calories: 0,
+    protein: 0,
+    carbs: 0,
+    fat: 0
+  }));
 
   return {
     text: combinedText.trim() || (hasPhoto ? "照片餐食" : ""),
     photo: primaryPhoto(normalizedPhotos),
     photos: normalizedPhotos,
     foods: fallback.matched,
+    items,
     calories: Math.round(fallback.calories),
     protein: round(fallback.protein),
     carbs: round(fallback.carbs),
@@ -658,6 +668,7 @@ function createLoadingAnalysis() {
     photo: primaryPhoto(pendingPhotos),
     photos: pendingPhotos,
     foods: [],
+    items: [],
     calories: 0,
     protein: 0,
     carbs: 0,
@@ -681,6 +692,26 @@ function primaryPhoto(photos) {
   return normalizePhotos(photos)[0] || "";
 }
 
+function normalizeFoodItems(items) {
+  if (!Array.isArray(items)) return [];
+  return items.map((item) => {
+    if (typeof item === "string") {
+      return { name: item, amount: "", calories: 0, protein: 0, carbs: 0, fat: 0 };
+    }
+
+    const name = String(item?.name || "").trim();
+    if (!name) return null;
+    return {
+      name,
+      amount: String(item.amount || "").trim(),
+      calories: Math.max(0, Math.round(numberValue(item.calories))),
+      protein: round(Math.max(0, numberValue(item.protein))),
+      carbs: round(Math.max(0, numberValue(item.carbs))),
+      fat: round(Math.max(0, numberValue(item.fat)))
+    };
+  }).filter(Boolean);
+}
+
 function renderAnalysis() {
   if (!pendingAnalysis) {
     els.analysisPanel.hidden = true;
@@ -698,12 +729,14 @@ function renderAnalysis() {
   els.carbs.value = pendingAnalysis.carbs || "";
   els.fat.value = pendingAnalysis.fat || "";
 
+  const items = normalizeFoodItems(pendingAnalysis.items || pendingAnalysis.foods || []);
+
   els.analysisSummary.innerHTML = `
     ${
       pendingAnalysis.warning
         ? `<div class="analysis-warning">${escapeHtml(pendingAnalysis.warning)}</div>`
         : pendingAnalysis.source === "ai"
-          ? `<div class="analysis-source">AI 分析结果，请确认后保存</div>`
+          ? `<div class="analysis-source">AI 识别结果，请检查食物和份量</div>`
           : ""
     }
     <div class="analysis-macros">
@@ -715,14 +748,32 @@ function renderAnalysis() {
     <div class="analysis-micros">
       ${microTargets().map((micro) => `<span>${micro.label} ${round(pendingAnalysis[micro.key] || 0)}${micro.unit}</span>`).join("")}
     </div>
-    <div class="food-chips">
-      ${(pendingAnalysis.foods.length ? pendingAnalysis.foods : ["待确认"]).map((food) => `<span>${escapeHtml(food)}</span>`).join("")}
+    <div class="food-breakdown">
+      <div class="breakdown-title">识别到的食物</div>
+      ${
+        items.length
+          ? items.map(renderFoodBreakdownItem).join("")
+          : `<div class="empty-state compact">还没有足够信息。可以继续补充食材和份量。</div>`
+      }
     </div>
   `;
 
   els.analysisChat.innerHTML = pendingAnalysis.messages
     .map((message) => `<div class="chat-message ${message.role}">${escapeHtml(message.text)}</div>`)
     .join("");
+}
+
+function renderFoodBreakdownItem(item) {
+  const amount = item.amount ? ` · ${escapeHtml(item.amount)}` : "";
+  return `
+    <article class="food-breakdown-item">
+      <div>
+        <strong>${escapeHtml(item.name)}${amount}</strong>
+        <span>P ${round(item.protein)}g · C ${round(item.carbs)}g · F ${round(item.fat)}g</span>
+      </div>
+      <b>${Math.round(item.calories)} kcal</b>
+    </article>
+  `;
 }
 
 function resetAnalysis() {
@@ -1235,6 +1286,7 @@ els.form.addEventListener("submit", (event) => {
     iron: numberValue(source.iron),
     photo: source.photo || primaryPhoto(source.photos || pendingPhotos),
     photos: normalizePhotos(source.photos || source.photo || pendingPhotos),
+    items: normalizeFoodItems(source.items || source.foods || []),
     createdAt: new Date().toISOString()
   };
 

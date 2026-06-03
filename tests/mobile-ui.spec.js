@@ -52,6 +52,8 @@ test("meal logging reveals nutrition fields only after analysis", async ({ page 
 
   await expect(page.locator("#macro-editor")).toBeVisible();
   await expect(page.locator("#calories-input")).toBeVisible();
+  await expect(page.getByText("识别到的食物")).toBeVisible();
+  await expect(page.getByRole("button", { name: "确认并保存餐食" })).toBeVisible();
 
   await expectNoHorizontalOverflow(page);
 });
