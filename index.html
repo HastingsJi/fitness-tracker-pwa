@@ -10,47 +10,11 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <link rel="manifest" href="manifest.json" />
     <link rel="apple-touch-icon" href="icons/icon-192.png" />
-    <link rel="stylesheet" href="styles.css?v=7" />
+    <link rel="stylesheet" href="styles.css?v=12" />
   </head>
   <body>
     <div class="app-shell">
-      <aside class="sidebar" aria-label="Fitness tracker summary">
-        <div class="brand">
-          <div class="brand-mark">F</div>
-          <div>
-            <h1>Fitness</h1>
-          </div>
-        </div>
-
-        <section class="panel goals-panel">
-          <div class="panel-header">
-            <h2>今日</h2>
-            <input id="entry-date" type="date" aria-label="选择日期" />
-          </div>
-          <dl class="goal-list compact-stats">
-            <div>
-              <dt>热量</dt>
-              <dd><span id="today-calories">0</span> kcal</dd>
-            </div>
-            <div>
-              <dt>蛋白质</dt>
-              <dd><span id="today-protein">0g</span></dd>
-            </div>
-            <div>
-              <dt>碳水</dt>
-              <dd><span id="today-carbs">0g</span></dd>
-            </div>
-            <div>
-              <dt>脂肪</dt>
-              <dd><span id="today-fat">0g</span></dd>
-            </div>
-            <div>
-              <dt>体重</dt>
-              <dd><span id="latest-weight">--</span></dd>
-            </div>
-          </dl>
-        </section>
-
+      <aside class="sidebar" aria-label="视图切换">
         <nav class="nav-tabs" aria-label="视图切换">
           <button class="nav-tab active" type="button" data-view="dashboard-view">总览</button>
           <button class="nav-tab" type="button" data-view="log-view">记录</button>
@@ -66,6 +30,7 @@
             <p class="eyebrow" id="today-label">今天</p>
             <h2 id="view-title">总览</h2>
           </div>
+          <input id="entry-date" type="date" aria-label="选择日期" />
         </header>
 
         <section class="view active" id="dashboard-view" data-title="总览">
@@ -101,7 +66,6 @@
             <section class="panel progress-panel">
               <div class="panel-header">
                 <h2>进度</h2>
-                <button class="text-button" id="export-button" type="button">导出 CSV</button>
               </div>
               <div class="ring-wrap">
                 <div class="calorie-ring" id="calorie-ring">
@@ -145,7 +109,10 @@
             <section class="panel">
               <div class="panel-header">
                 <h2>今日餐食</h2>
-                <button class="text-button danger" id="clear-day-button" type="button">清空当天</button>
+                <div class="panel-actions">
+                  <button class="primary-button compact-button" id="quick-add-meal-button" type="button">+ 餐食</button>
+                  <button class="text-button danger" id="clear-day-button" type="button">清空当天</button>
+                </div>
               </div>
               <div class="meal-list" id="meal-list"></div>
             </section>
@@ -153,67 +120,79 @@
         </section>
 
         <section class="view" id="log-view" data-title="记录">
-          <section class="panel log-panel">
-            <div class="panel-header">
-              <h2>今天</h2>
-            </div>
-
-            <form id="daily-form" class="stack">
-              <label>
-                <span>体重 kg</span>
-                <input id="weight-input" inputmode="decimal" min="0" step="any" type="number" placeholder="72.456" />
-              </label>
-
-              <label>
-                <span>餐食</span>
-                <textarea id="meal-text" rows="5" placeholder="例如：午餐 鸡胸肉150g 米饭200g 鸡蛋2个"></textarea>
-              </label>
-
-              <div class="upload-row">
-                <label class="photo-drop" for="food-photo">
-                  <input id="food-photo" accept="image/*" capture="environment" type="file" />
-                  <span>＋</span>
-                  <strong>照片</strong>
-                </label>
-                <img id="photo-preview" alt="食物照片预览" />
-              </div>
-
-              <div class="macro-grid">
-                <label>
-                  <span>热量 kcal</span>
-                  <input id="calories-input" inputmode="numeric" min="0" type="number" />
-                </label>
-                <label>
-                  <span>蛋白质 g</span>
-                  <input id="protein-input" inputmode="decimal" min="0" step="0.1" type="number" />
-                </label>
-                <label>
-                  <span>碳水 g</span>
-                  <input id="carbs-input" inputmode="decimal" min="0" step="0.1" type="number" />
-                </label>
-                <label>
-                  <span>脂肪 g</span>
-                  <input id="fat-input" inputmode="decimal" min="0" step="0.1" type="number" />
-                </label>
-              </div>
-
-              <div class="action-row">
-                <button id="estimate-button" class="secondary-button" type="button">分析</button>
-                <button class="primary-button" id="confirm-meal-button" type="submit" disabled>确认保存</button>
-              </div>
-            </form>
-
-            <section class="analysis-panel" id="analysis-panel" hidden>
+          <section class="log-grid">
+            <section class="panel log-panel">
               <div class="panel-header">
-                <h2>确认餐食</h2>
-                <button class="text-button" id="reset-analysis-button" type="button">重新开始</button>
+                <h2>添加餐食</h2>
               </div>
-              <div class="analysis-summary" id="analysis-summary"></div>
-              <div class="chat-log" id="analysis-chat"></div>
-              <div class="chat-row">
-                <input id="correction-input" type="text" placeholder="例如：米饭其实只有半碗，鸡胸肉大概120g" />
-                <button class="secondary-button" id="send-correction-button" type="button">发送</button>
+
+              <form id="daily-form" class="stack">
+                <label>
+                  <span>餐食</span>
+                  <textarea id="meal-text" rows="5" placeholder="例如：午餐 鸡胸肉150g 米饭200g 鸡蛋2个"></textarea>
+                </label>
+
+                <div class="upload-row">
+                  <label class="photo-drop" for="food-photo">
+                    <input id="food-photo" accept="image/*" capture="environment" type="file" />
+                    <span>＋</span>
+                    <strong>照片</strong>
+                  </label>
+                  <img id="photo-preview" alt="食物照片预览" />
+                </div>
+
+                <div class="macro-grid">
+                  <label>
+                    <span>热量 kcal</span>
+                    <input id="calories-input" inputmode="numeric" min="0" type="number" />
+                  </label>
+                  <label>
+                    <span>蛋白质 g</span>
+                    <input id="protein-input" inputmode="decimal" min="0" step="0.1" type="number" />
+                  </label>
+                  <label>
+                    <span>碳水 g</span>
+                    <input id="carbs-input" inputmode="decimal" min="0" step="0.1" type="number" />
+                  </label>
+                  <label>
+                    <span>脂肪 g</span>
+                    <input id="fat-input" inputmode="decimal" min="0" step="0.1" type="number" />
+                  </label>
+                </div>
+
+                <div class="action-row">
+                  <button id="estimate-button" class="secondary-button" type="button">分析餐食</button>
+                  <button class="primary-button" id="confirm-meal-button" type="submit" disabled>保存餐食</button>
+                </div>
+              </form>
+
+              <section class="analysis-panel" id="analysis-panel" hidden>
+                <div class="panel-header">
+                  <h2>确认餐食</h2>
+                  <button class="text-button" id="reset-analysis-button" type="button">重新开始</button>
+                </div>
+                <div class="analysis-summary" id="analysis-summary"></div>
+                <div class="chat-log" id="analysis-chat"></div>
+                <div class="chat-row">
+                  <input id="correction-input" type="text" placeholder="例如：米饭其实只有半碗，鸡胸肉大概120g" />
+                  <button class="secondary-button" id="send-correction-button" type="button">发送</button>
+                </div>
+              </section>
+            </section>
+
+            <section class="panel weight-log-panel">
+              <div class="panel-header">
+                <h2>记录体重</h2>
+                <span class="muted" id="weight-status">未保存</span>
               </div>
+
+              <form id="weight-form" class="weight-form">
+                <label>
+                  <span>体重 kg</span>
+                  <input id="weight-input" inputmode="decimal" min="0" step="any" type="number" placeholder="72.456" />
+                </label>
+                <button class="secondary-button" id="save-weight-button" type="submit">保存体重</button>
+              </form>
             </section>
           </section>
         </section>
@@ -383,6 +362,20 @@
       </form>
     </dialog>
 
-    <script src="app.js?v=12"></script>
+    <dialog id="unlock-dialog">
+      <form id="unlock-form" class="unlock-form">
+        <div class="panel-header">
+          <h2>解锁</h2>
+        </div>
+        <label>
+          <span>Passcode</span>
+          <input id="app-passcode-input" autocomplete="current-password" type="password" />
+        </label>
+        <p class="form-error" id="unlock-error" hidden>请输入 passcode</p>
+        <button class="primary-button" type="submit">继续</button>
+      </form>
+    </dialog>
+
+    <script src="app.js?v=17"></script>
   </body>
 </html>

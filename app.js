@@ -1,4 +1,5 @@
 const storageKey = "fitness-tracker-v2";
+const passcodeStorageKey = "fitness-tracker-passcode";
 const isDevServer = Boolean(window.__FITNESS_DEV__);
 
 if (isDevServer && "serviceWorker" in navigator) {
@@ -43,7 +44,13 @@ let isHydratingState = false;
 
 const els = {
   date: document.querySelector("#entry-date"),
+  unlockDialog: document.querySelector("#unlock-dialog"),
+  unlockForm: document.querySelector("#unlock-form"),
+  passcodeInput: document.querySelector("#app-passcode-input"),
+  unlockError: document.querySelector("#unlock-error"),
+  weightForm: document.querySelector("#weight-form"),
   weight: document.querySelector("#weight-input"),
+  weightStatus: document.querySelector("#weight-status"),
   mealText: document.querySelector("#meal-text"),
   photoInput: document.querySelector("#food-photo"),
   photoPreview: document.querySelector("#photo-preview"),
@@ -52,6 +59,7 @@ const els = {
   carbs: document.querySelector("#carbs-input"),
   fat: document.querySelector("#fat-input"),
   form: document.querySelector("#daily-form"),
+  quickAddMeal: document.querySelector("#quick-add-meal-button"),
   estimate: document.querySelector("#estimate-button"),
   confirmMeal: document.querySelector("#confirm-meal-button"),
   analysisPanel: document.querySelector("#analysis-panel"),
@@ -62,11 +70,6 @@ const els = {
   resetAnalysis: document.querySelector("#reset-analysis-button"),
   meals: document.querySelector("#meal-list"),
   history: document.querySelector("#history-table"),
-  todayCalories: document.querySelector("#today-calories"),
-  todayProtein: document.querySelector("#today-protein"),
-  todayCarbs: document.querySelector("#today-carbs"),
-  todayFat: document.querySelector("#today-fat"),
-  latestWeight: document.querySelector("#latest-weight"),
   calorieRing: document.querySelector("#calorie-ring"),
   caloriePercent: document.querySelector("#calorie-percent"),
   proteinBar: document.querySelector("#protein-bar"),
@@ -187,7 +190,11 @@ function scheduleRemoteSave() {
 }
 
 async function hydrateStateFromServer() {
-  const response = await fetch("/api/state");
+  const response = await apiFetch("/api/state");
+  if (response.status === 401) {
+    await requestPasscode(authPrompt());
+    return hydrateStateFromServer();
+  }
   if (!response.ok) throw new Error("state_load_failed");
   const payload = await response.json();
 
@@ -206,12 +213,59 @@ async function hydrateStateFromServer() {
 }
 
 async function syncStateToServer() {
-  const response = await fetch("/api/state", {
+  const response = await apiFetch("/api/state", {
     method: "PUT",
-    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ state })
   });
+  if (response.status === 401) {
+    await requestPasscode(authPrompt());
+    return syncStateToServer();
+  }
   if (!response.ok) throw new Error("state_save_failed");
+}
+
+function apiHeaders(extra = {}) {
+  const passcode = localStorage.getItem(passcodeStorageKey) || "";
+  return {
+    "Content-Type": "application/json",
+    ...(passcode ? { "X-App-Passcode": passcode } : {}),
+    ...extra
+  };
+}
+
+function apiFetch(url, options = {}) {
+  return fetch(url, {
+    ...options,
+    headers: apiHeaders(options.headers || {})
+  });
+}
+
+function authPrompt() {
+  return localStorage.getItem(passcodeStorageKey) ? "Passcode 不正确，请重新输入" : "请输入 passcode";
+}
+
+function requestPasscode(message = "请输入 passcode") {
+  return new Promise((resolve) => {
+    els.unlockError.textContent = message;
+    els.unlockError.hidden = true;
+    els.passcodeInput.value = localStorage.getItem(passcodeStorageKey) || "";
+    els.unlockDialog.showModal();
+
+    const handleSubmit = (event) => {
+      event.preventDefault();
+      const passcode = els.passcodeInput.value.trim();
+      if (!passcode) {
+        els.unlockError.hidden = false;
+        return;
+      }
+      localStorage.setItem(passcodeStorageKey, passcode);
+      els.unlockForm.removeEventListener("submit", handleSubmit);
+      els.unlockDialog.close();
+      resolve();
+    };
+
+    els.unlockForm.addEventListener("submit", handleSubmit);
+  });
 }
 
 function todayKey() {
@@ -510,12 +564,15 @@ async function createAnalysisDraft(text, photo, correction = "") {
 }
 
 async function requestMealAnalysis(text, photo, correction = "") {
-  const response = await fetch(photo ? "/api/analyze-meal-photo" : "/api/analyze-meal-text", {
+  const response = await apiFetch(photo ? "/api/analyze-meal-photo" : "/api/analyze-meal-text", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ text, correction, photo: photo || null })
   });
 
+  if (response.status === 401) {
+    await requestPasscode(authPrompt());
+    return requestMealAnalysis(text, photo, correction);
+  }
   if (!response.ok) throw new Error("analysis_failed");
   return response.json();
 }
@@ -646,6 +703,7 @@ function renderGoals() {
 function renderDayForm() {
   const day = getDay();
   els.weight.value = day.weight ?? "";
+  els.weightStatus.textContent = day.weight ? `已保存 ${day.weight}kg` : "未保存";
 }
 
 function renderProgress() {
@@ -656,11 +714,6 @@ function renderProgress() {
   const carbsPercent = Math.min(100, (totals.carbs / state.goals.carbs) * 100 || 0);
   const fatPercent = Math.min(100, (totals.fat / state.goals.fat) * 100 || 0);
 
-  els.todayCalories.textContent = Math.round(totals.calories);
-  els.todayProtein.textContent = `${round(totals.protein)}g`;
-  els.todayCarbs.textContent = `${round(totals.carbs)}g`;
-  els.todayFat.textContent = `${round(totals.fat)}g`;
-  els.latestWeight.textContent = latestWeightLabel();
   els.dashboardCalories.textContent = Math.round(totals.calories);
   els.dashboardProtein.textContent = `${round(totals.protein)}g`;
   els.dashboardCarbs.textContent = `${round(totals.carbs)}g`;
@@ -847,37 +900,6 @@ function resetMealInputs() {
   resetAnalysis();
 }
 
-function exportCsv() {
-  const headers = ["date", "weight_kg", "calories", "protein_g", "carbs_g", "fat_g", "meals"];
-  const rows = Object.entries(state.days)
-    .sort(([a], [b]) => a.localeCompare(b))
-    .map(([date, day]) => {
-      const totals = sumMeals(day);
-      return [
-        date,
-        day.weight ?? "",
-        Math.round(totals.calories),
-        round(totals.protein),
-        round(totals.carbs),
-        round(totals.fat),
-        day.meals.map((meal) => meal.text).join("; ")
-      ];
-    });
-  const csv = [headers, ...rows].map((row) => row.map(csvCell).join(",")).join("\n");
-  const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = `fitness-${todayKey()}.csv`;
-  link.click();
-  URL.revokeObjectURL(url);
-}
-
-function csvCell(value) {
-  const text = String(value ?? "");
-  return /[",\n]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text;
-}
-
 function showView(viewId) {
   const view = document.querySelector(`#${viewId}`);
   if (!view) return;
@@ -896,18 +918,26 @@ document.querySelectorAll("[data-view]").forEach((button) => {
   button.addEventListener("click", () => showView(button.dataset.view));
 });
 
+els.quickAddMeal.addEventListener("click", () => {
+  showView("log-view");
+  requestAnimationFrame(() => els.mealText.focus());
+});
+
 els.date.addEventListener("change", () => {
   activeDate = els.date.value || todayKey();
   resetMealInputs();
   render();
 });
 
-els.weight.addEventListener("change", () => {
-  getDay().weight = els.weight.value ? decimalValue(els.weight.value) : null;
-  if (els.weight.value) {
-    state.profile.weight = els.weight.value;
-  }
+els.weightForm.addEventListener("submit", (event) => {
+  event.preventDefault();
+  const value = decimalValue(els.weight.value);
+  if (!value) return;
+
+  getDay().weight = value;
+  state.profile.weight = String(value);
   saveState();
+  els.weightStatus.textContent = `已保存 ${value}kg`;
   renderProgress();
   renderHistory();
   drawWeightChart();
@@ -979,7 +1009,6 @@ els.photoInput.addEventListener("change", () => {
 els.form.addEventListener("submit", (event) => {
   event.preventDefault();
   const day = getDay();
-  if (els.weight.value) day.weight = decimalValue(els.weight.value);
 
   if (!pendingAnalysis) {
     pendingAnalysis = createLocalAnalysisDraft("", null);
@@ -1081,8 +1110,6 @@ document.querySelector("#reset-button").addEventListener("click", () => {
   saveState();
   render();
 });
-
-document.querySelector("#export-button").addEventListener("click", exportCsv);
 
 render();
 hydrateStateFromServer().catch(() => {

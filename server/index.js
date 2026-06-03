@@ -11,6 +11,7 @@ await loadLocalEnv();
 const port = Number(process.env.PORT || 8080);
 const host = process.env.HOST || "0.0.0.0";
 const isDevServer = process.env.DEV_SERVER === "1";
+const appPasscode = process.env.APP_PASSCODE || "";
 const openaiApiKey = process.env.OPENAI_API_KEY || "";
 const openaiModel = process.env.OPENAI_MODEL || "gpt-4.1-mini";
 const dataDir = process.env.DATA_DIR || (process.env.NODE_ENV === "production" ? "/data" : join(rootDir, "data"));
@@ -102,11 +103,13 @@ createServer(async (req, res) => {
     }
 
     if (req.url === "/api/state") {
+      if (!authorizeRequest(req, res)) return;
       await handleState(req, res);
       return;
     }
 
     if (req.url === "/api/analyze-meal-text" || req.url === "/api/analyze-meal-photo") {
+      if (!authorizeRequest(req, res)) return;
       await handleAnalyze(req, res);
       return;
     }
@@ -146,6 +149,16 @@ async function handleAnalyze(req, res) {
   const hasPhoto = Boolean(body.photo);
   const draft = await createAnalysisDraft(text, hasPhoto, correction, body.photo);
   sendJson(req, res, 200, draft);
+}
+
+function authorizeRequest(req, res) {
+  if (!appPasscode) return true;
+
+  const passcode = String(req.headers["x-app-passcode"] || "");
+  if (passcode && passcode === appPasscode) return true;
+
+  sendJson(req, res, 401, { error: "unauthorized" });
+  return false;
 }
 
 async function handleState(req, res) {
@@ -536,7 +549,7 @@ function writeCors(req, res) {
   if (!allowedOrigins.length || allowedOrigins.includes(origin)) {
     res.setHeader("Access-Control-Allow-Origin", origin);
     res.setHeader("Vary", "Origin");
-    res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type, X-App-Passcode");
     res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
   }
 }
