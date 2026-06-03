@@ -1,9 +1,9 @@
-const cacheName = "fitness-pwa-v19";
+const cacheName = "fitness-pwa-v21";
 const appShell = [
   "./",
   "./index.html",
-  "./styles.css?v=12",
-  "./app.js?v=18",
+  "./styles.css?v=13",
+  "./app.js?v=19",
   "./manifest.json",
   "./icons/icon.svg",
   "./icons/icon-192.png",

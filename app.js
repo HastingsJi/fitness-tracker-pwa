@@ -45,6 +45,7 @@ let passcodePromptPromise = null;
 
 const els = {
   date: document.querySelector("#entry-date"),
+  dateLabel: document.querySelector("#entry-date-label"),
   unlockDialog: document.querySelector("#unlock-dialog"),
   unlockForm: document.querySelector("#unlock-form"),
   passcodeInput: document.querySelector("#app-passcode-input"),
@@ -688,6 +689,7 @@ function readQuantityNearFood(text, alias, food) {
 function render() {
   els.todayLabel.textContent = activeDate === todayKey() ? "今天" : activeDate;
   els.date.value = activeDate;
+  els.dateLabel.textContent = dateControlLabel(activeDate);
   renderGoals();
   renderDayForm();
   writeProfileForm();
@@ -695,6 +697,35 @@ function render() {
   renderMeals();
   renderHistory();
   drawWeightChart();
+}
+
+function dateControlLabel(dateValue) {
+  const date = parseLocalDate(dateValue);
+  const today = parseLocalDate(todayKey());
+  const yesterday = addDays(today, -1);
+
+  if (sameDate(date, today)) return "今天";
+  if (sameDate(date, yesterday)) return "昨天";
+
+  return new Intl.DateTimeFormat("zh-CN", {
+    month: "short",
+    day: "numeric"
+  }).format(date);
+}
+
+function parseLocalDate(dateValue) {
+  const [year, month, day] = dateValue.split("-").map(Number);
+  return new Date(year, month - 1, day);
+}
+
+function addDays(date, days) {
+  const copy = new Date(date);
+  copy.setDate(copy.getDate() + days);
+  return copy;
+}
+
+function sameDate(a, b) {
+  return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
 }
 
 function renderGoals() {

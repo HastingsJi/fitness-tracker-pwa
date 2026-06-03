@@ -10,7 +10,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <link rel="manifest" href="manifest.json" />
     <link rel="apple-touch-icon" href="icons/icon-192.png" />
-    <link rel="stylesheet" href="styles.css?v=12" />
+    <link rel="stylesheet" href="styles.css?v=13" />
   </head>
   <body>
     <div class="app-shell">
@@ -30,7 +30,12 @@
             <p class="eyebrow" id="today-label">今天</p>
             <h2 id="view-title">总览</h2>
           </div>
-          <input id="entry-date" type="date" aria-label="选择日期" />
+          <div class="date-control">
+            <button class="date-display" type="button" tabindex="-1" aria-hidden="true">
+              <span id="entry-date-label">今天</span>
+            </button>
+            <input id="entry-date" type="date" aria-label="选择日期" />
+          </div>
         </header>
 
         <section class="view active" id="dashboard-view" data-title="总览">
@@ -376,6 +381,6 @@
       </form>
     </dialog>
 
-    <script src="app.js?v=18"></script>
+    <script src="app.js?v=19"></script>
   </body>
 </html>
