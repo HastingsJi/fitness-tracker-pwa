@@ -37,7 +37,7 @@ const foodDatabase = [
 
 const state = loadState();
 let activeDate = todayKey();
-let pendingPhoto = "";
+let pendingPhotos = [];
 let pendingAnalysis = null;
 let saveTimer = null;
 let isHydratingState = false;
@@ -557,12 +557,14 @@ function estimateFromText(text) {
   };
 }
 
-async function createAnalysisDraft(text, photo, correction = "") {
-  const serverDraft = await requestMealAnalysis(text, photo, correction).catch(() => null);
+async function createAnalysisDraft(text, photos, correction = "") {
+  const normalizedPhotos = normalizePhotos(photos);
+  const serverDraft = await requestMealAnalysis(text, normalizedPhotos, correction).catch(() => null);
   if (serverDraft) {
     return {
       text: serverDraft.text,
-      photo,
+      photo: primaryPhoto(normalizedPhotos),
+      photos: normalizedPhotos,
       foods: serverDraft.foods || [],
       calories: serverDraft.calories,
       protein: serverDraft.protein,
@@ -579,35 +581,38 @@ async function createAnalysisDraft(text, photo, correction = "") {
     };
   }
 
-  return createLocalAnalysisDraft(text, photo, correction);
+  return createLocalAnalysisDraft(text, normalizedPhotos, correction);
 }
 
-async function requestMealAnalysis(text, photo, correction = "") {
-  const response = await apiFetch(photo ? "/api/analyze-meal-photo" : "/api/analyze-meal-text", {
+async function requestMealAnalysis(text, photos, correction = "") {
+  const normalizedPhotos = normalizePhotos(photos);
+  const response = await apiFetch(normalizedPhotos.length ? "/api/analyze-meal-photo" : "/api/analyze-meal-text", {
     method: "POST",
-    body: JSON.stringify({ text, correction, photo: photo || null })
+    body: JSON.stringify({ text, correction, photo: primaryPhoto(normalizedPhotos) || null, photos: normalizedPhotos })
   });
 
   if (response.status === 401) {
     await requestPasscode(authPrompt());
-    return requestMealAnalysis(text, photo, correction);
+    return requestMealAnalysis(text, normalizedPhotos, correction);
   }
   if (!response.ok) throw new Error("analysis_failed");
   return response.json();
 }
 
-function createLocalAnalysisDraft(text, photo, correction = "") {
+function createLocalAnalysisDraft(text, photos, correction = "") {
+  const normalizedPhotos = normalizePhotos(photos);
   const combinedText = [text, correction].filter(Boolean).join(" ");
   const estimate = estimateFromText(combinedText);
   const hasFoodMatch = estimate.matched.length > 0;
-  const hasPhoto = Boolean(photo);
+  const hasPhoto = normalizedPhotos.length > 0;
   const fallback = hasPhoto && !hasFoodMatch
     ? { calories: 550, protein: 25, carbs: 60, fat: 22, matched: ["照片餐食 x 1"] }
     : estimate;
 
   return {
     text: combinedText.trim() || (hasPhoto ? "照片餐食" : ""),
-    photo,
+    photo: primaryPhoto(normalizedPhotos),
+    photos: normalizedPhotos,
     foods: fallback.matched,
     calories: Math.round(fallback.calories),
     protein: round(fallback.protein),
@@ -636,7 +641,8 @@ function createLocalAnalysisDraft(text, photo, correction = "") {
 function createLoadingAnalysis() {
   return {
     text: "",
-    photo: pendingPhoto,
+    photo: primaryPhoto(pendingPhotos),
+    photos: pendingPhotos,
     foods: [],
     calories: 0,
     protein: 0,
@@ -652,6 +658,15 @@ function createLoadingAnalysis() {
   };
 }
 
+function normalizePhotos(photos) {
+  if (!photos) return [];
+  return Array.isArray(photos) ? photos.filter(Boolean).map(String) : [String(photos)].filter(Boolean);
+}
+
+function primaryPhoto(photos) {
+  return normalizePhotos(photos)[0] || "";
+}
+
 function renderAnalysis() {
   if (!pendingAnalysis) {
     els.analysisPanel.hidden = true;
@@ -661,7 +676,7 @@ function renderAnalysis() {
   }
 
   els.analysisPanel.hidden = false;
-  els.confirmMeal.disabled = pendingAnalysis.isLoading || (!pendingAnalysis.text && !pendingAnalysis.photo);
+  els.confirmMeal.disabled = pendingAnalysis.isLoading || (!pendingAnalysis.text && !pendingAnalysis.photo && !normalizePhotos(pendingAnalysis.photos).length);
   els.macroEditor.hidden = Boolean(pendingAnalysis.isLoading);
   els.analysisSummary.hidden = Boolean(pendingAnalysis.isLoading);
   els.calories.value = pendingAnalysis.calories || "";
@@ -847,8 +862,8 @@ function renderMeals() {
       (meal) => `
         <article class="meal-item">
           ${
-            meal.photo
-              ? `<img class="meal-thumb" src="${meal.photo}" alt="食物照片" />`
+            primaryPhoto(meal.photos || meal.photo)
+              ? `<img class="meal-thumb" src="${primaryPhoto(meal.photos || meal.photo)}" alt="食物照片" />`
               : `<div class="meal-thumb empty" aria-hidden="true">餐</div>`
           }
           <div>
@@ -998,11 +1013,27 @@ function resetMealInputs() {
   els.carbs.value = "";
   els.fat.value = "";
   els.photoInput.value = "";
-  els.photoPreview.removeAttribute("src");
+  els.photoPreview.innerHTML = "";
   els.photoPreview.classList.remove("has-photo");
   els.macroEditor.hidden = true;
-  pendingPhoto = "";
+  pendingPhotos = [];
   resetAnalysis();
+}
+
+function readFileAsDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.addEventListener("load", () => resolve(String(reader.result)));
+    reader.addEventListener("error", () => reject(reader.error));
+    reader.readAsDataURL(file);
+  });
+}
+
+function renderPhotoPreview() {
+  els.photoPreview.innerHTML = pendingPhotos
+    .map((photo, index) => `<img src="${photo}" alt="食物照片 ${index + 1}" />`)
+    .join("");
+  els.photoPreview.classList.toggle("has-photo", pendingPhotos.length > 0);
 }
 
 function showView(viewId) {
@@ -1050,12 +1081,12 @@ els.weightForm.addEventListener("submit", (event) => {
 });
 
 els.estimate.addEventListener("click", () => {
-  const hasInput = els.mealText.value.trim() || pendingPhoto;
+  const hasInput = els.mealText.value.trim() || pendingPhotos.length;
   if (!hasInput) return;
 
   pendingAnalysis = createLoadingAnalysis();
   renderAnalysis();
-  createAnalysisDraft(els.mealText.value, pendingPhoto).then((draft) => {
+  createAnalysisDraft(els.mealText.value, pendingPhotos).then((draft) => {
     pendingAnalysis = draft;
     renderAnalysis();
   });
@@ -1078,7 +1109,7 @@ els.sendCorrection.addEventListener("click", () => {
   els.correctionInput.value = "";
   renderAnalysis();
 
-  createAnalysisDraft(els.mealText.value, pendingPhoto, correction).then((draft) => {
+  createAnalysisDraft(els.mealText.value, pendingPhotos, correction).then((draft) => {
     pendingAnalysis = {
       ...draft,
       messages: [
@@ -1101,16 +1132,14 @@ els.correctionInput.addEventListener("keydown", (event) => {
 els.resetAnalysis.addEventListener("click", resetAnalysis);
 
 els.photoInput.addEventListener("change", () => {
-  const file = els.photoInput.files?.[0];
-  if (!file) return;
-  const reader = new FileReader();
-  reader.addEventListener("load", () => {
-    pendingPhoto = String(reader.result);
-    els.photoPreview.src = pendingPhoto;
-    els.photoPreview.classList.add("has-photo");
+  const files = Array.from(els.photoInput.files || []);
+  if (!files.length) return;
+
+  Promise.all(files.map(readFileAsDataUrl)).then((photos) => {
+    pendingPhotos = photos;
+    renderPhotoPreview();
     if (pendingAnalysis) resetAnalysis();
   });
-  reader.readAsDataURL(file);
 });
 
 els.form.addEventListener("submit", (event) => {
@@ -1118,12 +1147,12 @@ els.form.addEventListener("submit", (event) => {
   const day = getDay();
 
   if (!pendingAnalysis) {
-    const hasInput = els.mealText.value.trim() || pendingPhoto;
+    const hasInput = els.mealText.value.trim() || pendingPhotos.length;
     if (!hasInput) return;
 
     pendingAnalysis = createLoadingAnalysis();
     renderAnalysis();
-    createAnalysisDraft(els.mealText.value, pendingPhoto).then((draft) => {
+    createAnalysisDraft(els.mealText.value, pendingPhotos).then((draft) => {
       pendingAnalysis = draft;
       renderAnalysis();
       saveState();
@@ -1142,7 +1171,8 @@ els.form.addEventListener("submit", (event) => {
     potassium: 0,
     calcium: 0,
     iron: 0,
-    photo: pendingPhoto
+    photo: primaryPhoto(pendingPhotos),
+    photos: pendingPhotos
   };
 
   const meal = {
@@ -1157,7 +1187,8 @@ els.form.addEventListener("submit", (event) => {
     potassium: numberValue(source.potassium),
     calcium: numberValue(source.calcium),
     iron: numberValue(source.iron),
-    photo: source.photo || pendingPhoto,
+    photo: source.photo || primaryPhoto(source.photos || pendingPhotos),
+    photos: normalizePhotos(source.photos || source.photo || pendingPhotos),
     createdAt: new Date().toISOString()
   };
 

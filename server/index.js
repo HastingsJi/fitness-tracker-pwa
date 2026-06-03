@@ -146,8 +146,9 @@ async function handleAnalyze(req, res) {
   const body = await readJsonBody(req);
   const text = String(body.text || "");
   const correction = String(body.correction || "");
-  const hasPhoto = Boolean(body.photo);
-  const draft = await createAnalysisDraft(text, hasPhoto, correction, body.photo);
+  const photos = normalizePhotoInputs(body);
+  const hasPhoto = photos.length > 0;
+  const draft = await createAnalysisDraft(text, hasPhoto, correction, photos);
   sendJson(req, res, 200, draft);
 }
 
@@ -365,7 +366,7 @@ async function createAnalysisDraft(text, hasPhoto, correction = "", photo = "") 
   };
 }
 
-async function createOpenAIAnalysisDraft(text, hasPhoto, correction, photo) {
+async function createOpenAIAnalysisDraft(text, hasPhoto, correction, photos) {
   const combinedText = [text, correction].filter(Boolean).join("\n更正：").trim();
   const content = [
     {
@@ -380,7 +381,7 @@ async function createOpenAIAnalysisDraft(text, hasPhoto, correction, photo) {
     }
   ];
 
-  if (hasPhoto && typeof photo === "string" && photo.startsWith("data:image/")) {
+  for (const photo of normalizePhotos(photos).slice(0, 4)) {
     content.push({
       type: "input_image",
       image_url: photo,
@@ -482,6 +483,17 @@ function publicOpenAIErrorMessage(error) {
   if (/rate limit/i.test(message)) return "OpenAI rate limit，请稍后再试。";
   if (/model/i.test(message)) return "OpenAI 模型配置可能不可用。";
   return "请稍后再试。";
+}
+
+function normalizePhotoInputs(body) {
+  const photos = Array.isArray(body.photos) ? body.photos : [];
+  if (typeof body.photo === "string" && body.photo) photos.unshift(body.photo);
+  return normalizePhotos(photos);
+}
+
+function normalizePhotos(photos) {
+  return (Array.isArray(photos) ? photos : [photos])
+    .filter((photo) => typeof photo === "string" && photo.startsWith("data:image/"));
 }
 
 function estimateFromText(text) {

@@ -45,6 +45,7 @@ test("trend chart renders in a stable mobile frame", async ({ page }) => {
 test("meal logging reveals nutrition fields only after analysis", async ({ page }) => {
   await page.getByRole("button", { name: "记录" }).click();
   await expect(page.locator("#macro-editor")).toBeHidden();
+  await expect(page.locator("#food-photo")).toHaveAttribute("multiple", "");
 
   await page.locator("#meal-text").fill("午餐：鸡胸肉150g 米饭200g");
   await page.getByRole("button", { name: "分析餐食" }).click();
@@ -52,5 +53,24 @@ test("meal logging reveals nutrition fields only after analysis", async ({ page 
   await expect(page.locator("#macro-editor")).toBeVisible();
   await expect(page.locator("#calories-input")).toBeVisible();
 
+  await expectNoHorizontalOverflow(page);
+});
+
+test("meal logging accepts multiple photos from the picker", async ({ page }) => {
+  await page.getByRole("button", { name: "记录" }).click();
+  await page.locator("#food-photo").setInputFiles([
+    {
+      name: "meal-1.png",
+      mimeType: "image/png",
+      buffer: Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=", "base64")
+    },
+    {
+      name: "meal-2.png",
+      mimeType: "image/png",
+      buffer: Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=", "base64")
+    }
+  ]);
+
+  await expect(page.locator("#photo-preview img")).toHaveCount(2);
   await expectNoHorizontalOverflow(page);
 });
