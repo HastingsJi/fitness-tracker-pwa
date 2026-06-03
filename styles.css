@@ -513,6 +513,112 @@ textarea:focus {
   min-height: 48px;
 }
 
+.analysis-loading-card {
+  display: grid;
+  gap: 14px;
+  padding: 14px;
+  border: 1px solid #d7e4dd;
+  border-radius: 8px;
+  background: linear-gradient(180deg, #f5fbf8, #fff);
+}
+
+.loading-heading {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+}
+
+.loading-heading div {
+  display: grid;
+  gap: 3px;
+}
+
+.loading-heading strong {
+  font-size: 15px;
+}
+
+.loading-heading span:not(.loading-spinner) {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.loading-spinner {
+  width: 28px;
+  height: 28px;
+  border: 3px solid #d4e5de;
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.9s linear infinite;
+}
+
+.loading-steps {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.loading-steps span {
+  min-height: 30px;
+  padding: 7px 8px;
+  border-radius: 8px;
+  background: #edf6f2;
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 850;
+  text-align: center;
+}
+
+.analysis-skeleton-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.skeleton-card,
+.skeleton-list div {
+  position: relative;
+  overflow: hidden;
+  border-radius: 8px;
+  background: #edf1ee;
+}
+
+.skeleton-card {
+  min-height: 74px;
+}
+
+.skeleton-list {
+  display: grid;
+  gap: 8px;
+}
+
+.skeleton-list div {
+  height: 48px;
+}
+
+.skeleton-card::after,
+.skeleton-list div::after {
+  position: absolute;
+  inset: 0;
+  content: "";
+  transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.72), transparent);
+  animation: shimmer 1.2s ease-in-out infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes shimmer {
+  100% {
+    transform: translateX(100%);
+  }
+}
+
 .chat-log {
   display: grid;
   gap: 8px;
@@ -1078,10 +1184,15 @@ dialog::backdrop {
   .quick-metrics,
   .macro-grid,
   .analysis-macros,
+  .analysis-skeleton-grid,
   .upload-row,
   .setup-grid,
   .result-grid,
   .chat-row {
+    grid-template-columns: 1fr;
+  }
+
+  .loading-steps {
     grid-template-columns: 1fr;
   }
 
@@ -1096,5 +1207,13 @@ dialog::backdrop {
 
   table {
     min-width: 560px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .loading-spinner,
+  .skeleton-card::after,
+  .skeleton-list div::after {
+    animation: none;
   }
 }

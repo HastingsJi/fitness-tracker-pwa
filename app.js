@@ -683,6 +683,17 @@ function createLoadingAnalysis() {
   };
 }
 
+function withLoadingAnalysis(previous = null) {
+  return {
+    ...createLoadingAnalysis(),
+    photo: primaryPhoto(pendingPhotos) || previous?.photo || "",
+    photos: pendingPhotos.length ? pendingPhotos : normalizePhotos(previous?.photos || previous?.photo),
+    messages: previous?.messages?.length
+      ? [...previous.messages, { role: "assistant", text: "正在更新分析..." }]
+      : [{ role: "assistant", text: "正在识别食物和估算营养..." }]
+  };
+}
+
 function normalizePhotos(photos) {
   if (!photos) return [];
   return Array.isArray(photos) ? photos.filter(Boolean).map(String) : [String(photos)].filter(Boolean);
@@ -717,17 +728,31 @@ function renderAnalysis() {
     els.analysisPanel.hidden = true;
     els.confirmMeal.disabled = true;
     els.macroEditor.hidden = true;
+    els.estimate.disabled = false;
+    els.sendCorrection.disabled = false;
+    els.correctionInput.disabled = false;
     return;
   }
 
   els.analysisPanel.hidden = false;
   els.confirmMeal.disabled = pendingAnalysis.isLoading || (!pendingAnalysis.text && !pendingAnalysis.photo && !normalizePhotos(pendingAnalysis.photos).length);
+  els.estimate.disabled = Boolean(pendingAnalysis.isLoading);
+  els.sendCorrection.disabled = Boolean(pendingAnalysis.isLoading);
+  els.correctionInput.disabled = Boolean(pendingAnalysis.isLoading);
   els.macroEditor.hidden = Boolean(pendingAnalysis.isLoading);
-  els.analysisSummary.hidden = Boolean(pendingAnalysis.isLoading);
+  els.analysisSummary.hidden = false;
   els.calories.value = pendingAnalysis.calories || "";
   els.protein.value = pendingAnalysis.protein || "";
   els.carbs.value = pendingAnalysis.carbs || "";
   els.fat.value = pendingAnalysis.fat || "";
+
+  if (pendingAnalysis.isLoading) {
+    els.analysisSummary.innerHTML = renderAnalysisLoading();
+    els.analysisChat.innerHTML = pendingAnalysis.messages
+      .map((message) => `<div class="chat-message ${message.role}">${escapeHtml(message.text)}</div>`)
+      .join("");
+    return;
+  }
 
   const items = normalizeFoodItems(pendingAnalysis.items || pendingAnalysis.foods || []);
 
@@ -761,6 +786,36 @@ function renderAnalysis() {
   els.analysisChat.innerHTML = pendingAnalysis.messages
     .map((message) => `<div class="chat-message ${message.role}">${escapeHtml(message.text)}</div>`)
     .join("");
+}
+
+function renderAnalysisLoading() {
+  return `
+    <div class="analysis-loading-card" aria-live="polite">
+      <div class="loading-heading">
+        <span class="loading-spinner" aria-hidden="true"></span>
+        <div>
+          <strong>正在分析餐食</strong>
+          <span>识别食物、估算份量和营养</span>
+        </div>
+      </div>
+      <div class="loading-steps">
+        <span>读取照片/文字</span>
+        <span>拆分食物</span>
+        <span>计算营养</span>
+      </div>
+      <div class="analysis-skeleton-grid" aria-hidden="true">
+        <div class="skeleton-card"></div>
+        <div class="skeleton-card"></div>
+        <div class="skeleton-card"></div>
+        <div class="skeleton-card"></div>
+      </div>
+      <div class="skeleton-list" aria-hidden="true">
+        <div></div>
+        <div></div>
+        <div></div>
+      </div>
+    </div>
+  `;
 }
 
 function renderFoodBreakdownItem(item) {
@@ -1181,7 +1236,7 @@ els.estimate.addEventListener("click", () => {
   const hasInput = els.mealText.value.trim() || pendingPhotos.length;
   if (!hasInput) return;
 
-  pendingAnalysis = createLoadingAnalysis();
+  pendingAnalysis = withLoadingAnalysis();
   renderAnalysis();
   createAnalysisDraft(els.mealText.value, pendingPhotos).then((draft) => {
     pendingAnalysis = draft;
@@ -1198,11 +1253,10 @@ els.sendCorrection.addEventListener("click", () => {
   if (!correction || !pendingAnalysis) return;
 
   const previousMessages = pendingAnalysis.messages;
-  pendingAnalysis.messages = [
-    ...previousMessages,
-    { role: "user", text: correction },
-    { role: "assistant", text: "更新中..." }
-  ];
+  pendingAnalysis = withLoadingAnalysis({
+    ...pendingAnalysis,
+    messages: [...previousMessages, { role: "user", text: correction }]
+  });
   els.correctionInput.value = "";
   renderAnalysis();
 
@@ -1247,7 +1301,7 @@ els.form.addEventListener("submit", (event) => {
     const hasInput = els.mealText.value.trim() || pendingPhotos.length;
     if (!hasInput) return;
 
-    pendingAnalysis = createLoadingAnalysis();
+    pendingAnalysis = withLoadingAnalysis();
     renderAnalysis();
     createAnalysisDraft(els.mealText.value, pendingPhotos).then((draft) => {
       pendingAnalysis = draft;
