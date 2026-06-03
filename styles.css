@@ -358,6 +358,10 @@ textarea:focus {
   gap: 12px;
 }
 
+.macro-editor[hidden] {
+  display: none;
+}
+
 .upload-row {
   display: grid;
   grid-template-columns: minmax(170px, 220px) minmax(0, 1fr);
@@ -380,6 +384,27 @@ textarea:focus {
 .analysis-summary {
   display: grid;
   gap: 12px;
+}
+
+.analysis-warning,
+.analysis-source {
+  padding: 10px 12px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1.4;
+}
+
+.analysis-warning {
+  border: 1px solid #f6c8a8;
+  background: #fff4ed;
+  color: #8a3d16;
+}
+
+.analysis-source {
+  border: 1px solid #bee3d7;
+  background: #eefaf6;
+  color: var(--accent);
 }
 
 .analysis-macros {

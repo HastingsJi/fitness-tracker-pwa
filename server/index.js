@@ -324,10 +324,12 @@ function sendDevClearPage(res) {
 }
 
 async function createAnalysisDraft(text, hasPhoto, correction = "", photo = "") {
+  let aiError = "";
   if (openaiApiKey) {
     try {
       return await createOpenAIAnalysisDraft(text, hasPhoto, correction, photo);
     } catch (error) {
+      aiError = publicOpenAIErrorMessage(error);
       console.error("OpenAI meal analysis failed", error);
     }
   }
@@ -351,6 +353,10 @@ async function createAnalysisDraft(text, hasPhoto, correction = "", photo = "") 
     potassium: 0,
     calcium: 0,
     iron: 0,
+    source: "fallback",
+    warning: aiError
+      ? `AI 分析暂时不可用，当前是本地粗略估算。${aiError}`
+      : "当前是本地粗略估算，没有调用 AI。",
     message: hasFoodMatch
       ? "我先按这些食物估算。你可以继续更正份量或食材。"
       : hasPhoto
@@ -464,8 +470,18 @@ function normalizeOpenAIAnalysis(parsed, text, hasPhoto) {
     potassium: round(Math.max(0, Number(parsed.potassium) || 0)),
     calcium: round(Math.max(0, Number(parsed.calcium) || 0)),
     iron: round(Math.max(0, Number(parsed.iron) || 0)),
+    source: "ai",
+    warning: "",
     message: String(parsed.message || "我先生成了一个餐食估算，请确认食材和份量。")
   };
+}
+
+function publicOpenAIErrorMessage(error) {
+  const message = String(error?.message || "");
+  if (/quota|billing/i.test(message)) return "OpenAI quota 或 billing 需要检查。";
+  if (/rate limit/i.test(message)) return "OpenAI rate limit，请稍后再试。";
+  if (/model/i.test(message)) return "OpenAI 模型配置可能不可用。";
+  return "请稍后再试。";
 }
 
 function estimateFromText(text) {

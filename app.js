@@ -60,6 +60,7 @@ const els = {
   protein: document.querySelector("#protein-input"),
   carbs: document.querySelector("#carbs-input"),
   fat: document.querySelector("#fat-input"),
+  macroEditor: document.querySelector("#macro-editor"),
   form: document.querySelector("#daily-form"),
   quickAddMeal: document.querySelector("#quick-add-meal-button"),
   estimate: document.querySelector("#estimate-button"),
@@ -572,6 +573,8 @@ async function createAnalysisDraft(text, photo, correction = "") {
       potassium: serverDraft.potassium || 0,
       calcium: serverDraft.calcium || 0,
       iron: serverDraft.iron || 0,
+      source: serverDraft.source || "ai",
+      warning: serverDraft.warning || "",
       messages: [{ role: "assistant", text: serverDraft.message }]
     };
   }
@@ -615,6 +618,8 @@ function createLocalAnalysisDraft(text, photo, correction = "") {
     potassium: 0,
     calcium: 0,
     iron: 0,
+    source: "fallback",
+    warning: "当前是本地粗略估算，没有调用 AI。",
     messages: [
       {
         role: "assistant",
@@ -628,21 +633,50 @@ function createLocalAnalysisDraft(text, photo, correction = "") {
   };
 }
 
+function createLoadingAnalysis() {
+  return {
+    text: "",
+    photo: pendingPhoto,
+    foods: [],
+    calories: 0,
+    protein: 0,
+    carbs: 0,
+    fat: 0,
+    fiber: 0,
+    sodium: 0,
+    potassium: 0,
+    calcium: 0,
+    iron: 0,
+    isLoading: true,
+    messages: [{ role: "assistant", text: "分析中..." }]
+  };
+}
+
 function renderAnalysis() {
   if (!pendingAnalysis) {
     els.analysisPanel.hidden = true;
     els.confirmMeal.disabled = true;
+    els.macroEditor.hidden = true;
     return;
   }
 
   els.analysisPanel.hidden = false;
-  els.confirmMeal.disabled = !pendingAnalysis.text && !pendingAnalysis.photo;
+  els.confirmMeal.disabled = pendingAnalysis.isLoading || (!pendingAnalysis.text && !pendingAnalysis.photo);
+  els.macroEditor.hidden = Boolean(pendingAnalysis.isLoading);
+  els.analysisSummary.hidden = Boolean(pendingAnalysis.isLoading);
   els.calories.value = pendingAnalysis.calories || "";
   els.protein.value = pendingAnalysis.protein || "";
   els.carbs.value = pendingAnalysis.carbs || "";
   els.fat.value = pendingAnalysis.fat || "";
 
   els.analysisSummary.innerHTML = `
+    ${
+      pendingAnalysis.warning
+        ? `<div class="analysis-warning">${escapeHtml(pendingAnalysis.warning)}</div>`
+        : pendingAnalysis.source === "ai"
+          ? `<div class="analysis-source">AI 分析结果，请确认后保存</div>`
+          : ""
+    }
     <div class="analysis-macros">
       <article><span>热量</span><strong>${pendingAnalysis.calories || 0}</strong><small>kcal</small></article>
       <article><span>蛋白质</span><strong>${pendingAnalysis.protein || 0}</strong><small>g</small></article>
@@ -966,6 +1000,7 @@ function resetMealInputs() {
   els.photoInput.value = "";
   els.photoPreview.removeAttribute("src");
   els.photoPreview.classList.remove("has-photo");
+  els.macroEditor.hidden = true;
   pendingPhoto = "";
   resetAnalysis();
 }
@@ -1015,8 +1050,10 @@ els.weightForm.addEventListener("submit", (event) => {
 });
 
 els.estimate.addEventListener("click", () => {
-  pendingAnalysis = createLocalAnalysisDraft("", null);
-  pendingAnalysis.messages = [{ role: "assistant", text: "分析中..." }];
+  const hasInput = els.mealText.value.trim() || pendingPhoto;
+  if (!hasInput) return;
+
+  pendingAnalysis = createLoadingAnalysis();
   renderAnalysis();
   createAnalysisDraft(els.mealText.value, pendingPhoto).then((draft) => {
     pendingAnalysis = draft;
@@ -1081,8 +1118,10 @@ els.form.addEventListener("submit", (event) => {
   const day = getDay();
 
   if (!pendingAnalysis) {
-    pendingAnalysis = createLocalAnalysisDraft("", null);
-    pendingAnalysis.messages = [{ role: "assistant", text: "分析中..." }];
+    const hasInput = els.mealText.value.trim() || pendingPhoto;
+    if (!hasInput) return;
+
+    pendingAnalysis = createLoadingAnalysis();
     renderAnalysis();
     createAnalysisDraft(els.mealText.value, pendingPhoto).then((draft) => {
       pendingAnalysis = draft;

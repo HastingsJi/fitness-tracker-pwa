@@ -41,3 +41,16 @@ test("trend chart renders in a stable mobile frame", async ({ page }) => {
 
   await expectNoHorizontalOverflow(page);
 });
+
+test("meal logging reveals nutrition fields only after analysis", async ({ page }) => {
+  await page.getByRole("button", { name: "记录" }).click();
+  await expect(page.locator("#macro-editor")).toBeHidden();
+
+  await page.locator("#meal-text").fill("午餐：鸡胸肉150g 米饭200g");
+  await page.getByRole("button", { name: "分析餐食" }).click();
+
+  await expect(page.locator("#macro-editor")).toBeVisible();
+  await expect(page.locator("#calories-input")).toBeVisible();
+
+  await expectNoHorizontalOverflow(page);
+});
