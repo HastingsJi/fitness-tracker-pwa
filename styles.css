@@ -358,10 +358,6 @@ textarea:focus {
   gap: 12px;
 }
 
-.macro-editor[hidden] {
-  display: none;
-}
-
 .upload-row {
   display: grid;
   grid-template-columns: minmax(170px, 220px) minmax(0, 1fr);

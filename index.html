@@ -147,25 +147,6 @@
                   <div class="photo-preview-grid" id="photo-preview" aria-label="食物照片预览"></div>
                 </div>
 
-                <div class="macro-grid macro-editor" id="macro-editor" hidden>
-                  <label>
-                    <span>热量 kcal</span>
-                    <input id="calories-input" inputmode="numeric" min="0" type="number" />
-                  </label>
-                  <label>
-                    <span>蛋白质 g</span>
-                    <input id="protein-input" inputmode="decimal" min="0" step="0.1" type="number" />
-                  </label>
-                  <label>
-                    <span>碳水 g</span>
-                    <input id="carbs-input" inputmode="decimal" min="0" step="0.1" type="number" />
-                  </label>
-                  <label>
-                    <span>脂肪 g</span>
-                    <input id="fat-input" inputmode="decimal" min="0" step="0.1" type="number" />
-                  </label>
-                </div>
-
                 <div class="action-row">
                   <button id="estimate-button" class="secondary-button" type="button">分析餐食</button>
                 </div>
@@ -174,7 +155,7 @@
               <section class="analysis-panel" id="analysis-panel" hidden>
                 <div class="panel-header">
                   <h2>确认餐食</h2>
-                  <button class="text-button" id="reset-analysis-button" type="button">重新开始</button>
+                  <button class="secondary-button compact-button" id="reset-analysis-button" type="button">重新开始</button>
                 </div>
                 <div class="analysis-summary" id="analysis-summary"></div>
                 <div class="chat-log" id="analysis-chat"></div>

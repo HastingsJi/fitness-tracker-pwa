@@ -71,7 +71,7 @@ test("meal logging reveals nutrition fields only after analysis", async ({ page 
   });
 
   await page.getByRole("button", { name: "记录" }).click();
-  await expect(page.locator("#macro-editor")).toBeHidden();
+  await expect(page.locator("#macro-editor")).toHaveCount(0);
   await expect(page.locator("#food-photo")).toHaveAttribute("multiple", "");
 
   await page.locator("#meal-text").fill("午餐：鸡胸肉150g 米饭200g");
@@ -79,9 +79,9 @@ test("meal logging reveals nutrition fields only after analysis", async ({ page 
 
   await expect(page.getByText("正在分析餐食")).toBeVisible();
   await expect(page.getByRole("button", { name: "分析餐食" })).toBeDisabled();
-  await expect(page.locator("#macro-editor")).toBeVisible();
-  await expect(page.locator("#calories-input")).toBeVisible();
+  await expect(page.locator("#calories-input")).toHaveCount(0);
   await expect(page.getByText("识别到的食物")).toBeVisible();
+  await expect(page.getByRole("button", { name: "重新开始" })).toBeVisible();
   await expect(page.getByRole("button", { name: "确认并保存餐食" })).toBeVisible();
 
   await expectNoHorizontalOverflow(page);

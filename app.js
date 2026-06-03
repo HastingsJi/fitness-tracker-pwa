@@ -56,11 +56,6 @@ const els = {
   mealText: document.querySelector("#meal-text"),
   photoInput: document.querySelector("#food-photo"),
   photoPreview: document.querySelector("#photo-preview"),
-  calories: document.querySelector("#calories-input"),
-  protein: document.querySelector("#protein-input"),
-  carbs: document.querySelector("#carbs-input"),
-  fat: document.querySelector("#fat-input"),
-  macroEditor: document.querySelector("#macro-editor"),
   form: document.querySelector("#daily-form"),
   quickAddMeal: document.querySelector("#quick-add-meal-button"),
   estimate: document.querySelector("#estimate-button"),
@@ -727,7 +722,6 @@ function renderAnalysis() {
   if (!pendingAnalysis) {
     els.analysisPanel.hidden = true;
     els.confirmMeal.disabled = true;
-    els.macroEditor.hidden = true;
     els.estimate.disabled = false;
     els.sendCorrection.disabled = false;
     els.correctionInput.disabled = false;
@@ -739,12 +733,7 @@ function renderAnalysis() {
   els.estimate.disabled = Boolean(pendingAnalysis.isLoading);
   els.sendCorrection.disabled = Boolean(pendingAnalysis.isLoading);
   els.correctionInput.disabled = Boolean(pendingAnalysis.isLoading);
-  els.macroEditor.hidden = Boolean(pendingAnalysis.isLoading);
   els.analysisSummary.hidden = false;
-  els.calories.value = pendingAnalysis.calories || "";
-  els.protein.value = pendingAnalysis.protein || "";
-  els.carbs.value = pendingAnalysis.carbs || "";
-  els.fat.value = pendingAnalysis.fat || "";
 
   if (pendingAnalysis.isLoading) {
     els.analysisSummary.innerHTML = renderAnalysisLoading();
@@ -1128,14 +1117,9 @@ function escapeHtml(value) {
 
 function resetMealInputs() {
   els.mealText.value = "";
-  els.calories.value = "";
-  els.protein.value = "";
-  els.carbs.value = "";
-  els.fat.value = "";
   els.photoInput.value = "";
   els.photoPreview.innerHTML = "";
   els.photoPreview.classList.remove("has-photo");
-  els.macroEditor.hidden = true;
   pendingPhotos = [];
   resetAnalysis();
 }
@@ -1313,10 +1297,10 @@ els.form.addEventListener("submit", (event) => {
 
   const source = pendingAnalysis || {
     text: els.mealText.value.trim(),
-    calories: numberValue(els.calories.value),
-    protein: numberValue(els.protein.value),
-    carbs: numberValue(els.carbs.value),
-    fat: numberValue(els.fat.value),
+    calories: 0,
+    protein: 0,
+    carbs: 0,
+    fat: 0,
     fiber: 0,
     sodium: 0,
     potassium: 0,
@@ -1329,10 +1313,10 @@ els.form.addEventListener("submit", (event) => {
   const meal = {
     id: crypto.randomUUID(),
     text: source.text || els.mealText.value.trim(),
-    calories: numberValue(els.calories.value || source.calories),
-    protein: numberValue(els.protein.value || source.protein),
-    carbs: numberValue(els.carbs.value || source.carbs),
-    fat: numberValue(els.fat.value || source.fat),
+    calories: numberValue(source.calories),
+    protein: numberValue(source.protein),
+    carbs: numberValue(source.carbs),
+    fat: numberValue(source.fat),
     fiber: numberValue(source.fiber),
     sodium: numberValue(source.sodium),
     potassium: numberValue(source.potassium),
