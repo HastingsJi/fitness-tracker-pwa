@@ -854,7 +854,17 @@ function drawWeightChart() {
     .sort(([a], [b]) => a.localeCompare(b))
     .slice(-30);
 
-  const { width, height } = els.chart;
+  const ratio = window.devicePixelRatio || 1;
+  const displayWidth = Math.max(280, Math.floor(els.chart.parentElement?.clientWidth || els.chart.clientWidth || 900));
+  const displayHeight = displayWidth < 520 ? 260 : 320;
+  els.chart.width = Math.floor(displayWidth * ratio);
+  els.chart.height = Math.floor(displayHeight * ratio);
+  els.chart.style.width = `${displayWidth}px`;
+  els.chart.style.height = `${displayHeight}px`;
+  ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+
+  const width = displayWidth;
+  const height = displayHeight;
   ctx.clearRect(0, 0, width, height);
   ctx.fillStyle = "#fbfcfa";
   ctx.fillRect(0, 0, width, height);
@@ -870,31 +880,42 @@ function drawWeightChart() {
   const weights = points.map(([, day]) => Number(day.weight));
   const min = Math.min(...weights, state.goals.targetWeight) - 1;
   const max = Math.max(...weights, state.goals.targetWeight) + 1;
-  const pad = 42;
+  const leftPad = width < 520 ? 28 : 44;
+  const rightPad = width < 520 ? 28 : 44;
+  const topPad = width < 520 ? 34 : 42;
+  const bottomPad = width < 520 ? 42 : 48;
+  const chartWidth = width - leftPad - rightPad;
+  const chartHeight = height - topPad - bottomPad;
 
-  const xFor = (index) => pad + (index / (points.length - 1)) * (width - pad * 2);
-  const yFor = (weight) => height - pad - ((weight - min) / (max - min)) * (height - pad * 2);
+  const xFor = (index) => {
+    if (points.length === 2) return leftPad + (index === 0 ? chartWidth * 0.08 : chartWidth * 0.92);
+    return leftPad + (index / (points.length - 1)) * chartWidth;
+  };
+  const yFor = (weight) => topPad + chartHeight - ((weight - min) / (max - min)) * chartHeight;
 
   ctx.strokeStyle = "#dde3dc";
   ctx.lineWidth = 1;
   for (let i = 0; i < 5; i += 1) {
-    const y = pad + i * ((height - pad * 2) / 4);
+    const y = topPad + i * (chartHeight / 4);
     ctx.beginPath();
-    ctx.moveTo(pad, y);
-    ctx.lineTo(width - pad, y);
+    ctx.moveTo(leftPad, y);
+    ctx.lineTo(width - rightPad, y);
     ctx.stroke();
   }
 
   ctx.strokeStyle = "#e56f3f";
-  ctx.setLineDash([8, 8]);
+  ctx.lineWidth = 1.5;
+  ctx.setLineDash([4, 6]);
   ctx.beginPath();
-  ctx.moveTo(pad, yFor(state.goals.targetWeight));
-  ctx.lineTo(width - pad, yFor(state.goals.targetWeight));
+  ctx.moveTo(leftPad, yFor(state.goals.targetWeight));
+  ctx.lineTo(width - rightPad, yFor(state.goals.targetWeight));
   ctx.stroke();
   ctx.setLineDash([]);
 
   ctx.strokeStyle = "#167a68";
-  ctx.lineWidth = 4;
+  ctx.lineWidth = width < 520 ? 3 : 4;
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
   ctx.beginPath();
   points.forEach(([, day], index) => {
     const x = xFor(index);
@@ -909,19 +930,22 @@ function drawWeightChart() {
     const y = yFor(day.weight);
     ctx.fillStyle = "#167a68";
     ctx.beginPath();
-    ctx.arc(x, y, 5, 0, Math.PI * 2);
+    ctx.arc(x, y, width < 520 ? 4 : 5, 0, Math.PI * 2);
     ctx.fill();
     if (index === 0 || index === points.length - 1) {
       ctx.fillStyle = "#18201d";
-      ctx.font = "14px system-ui";
-      ctx.fillText(`${day.weight}kg`, x - 18, y - 12);
+      ctx.font = "700 12px system-ui";
+      ctx.textAlign = index === 0 ? "left" : "right";
+      ctx.fillText(`${day.weight}kg`, x + (index === 0 ? 6 : -6), y - 10);
       ctx.fillStyle = "#6e7771";
-      ctx.fillText(date.slice(5), x - 18, height - 14);
+      ctx.font = "12px system-ui";
+      ctx.fillText(date.slice(5), x, height - 14);
     }
   });
 
   const diff = round(weights.at(-1) - weights[0]);
-  els.trendNote.textContent = `${points[0][0]} 到 ${points.at(-1)[0]}：${diff > 0 ? "+" : ""}${diff} kg`;
+  const direction = diff < 0 ? "下降" : diff > 0 ? "上升" : "持平";
+  els.trendNote.textContent = `${points[0][0].slice(5)} - ${points.at(-1)[0].slice(5)} · ${direction} ${Math.abs(diff)} kg`;
 }
 
 function escapeHtml(value) {

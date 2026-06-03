@@ -723,6 +723,27 @@ canvas {
   height: 320px;
 }
 
+.trend-panel .panel-header {
+  align-items: flex-start;
+}
+
+.trend-panel .panel-header h2 {
+  max-width: 80px;
+  line-height: 1.05;
+}
+
+#weight-trend-note {
+  max-width: min(100%, 320px);
+  text-align: right;
+  line-height: 1.35;
+}
+
+.chart-shell {
+  overflow: hidden;
+  border-radius: 8px;
+  background: #fbfcfa;
+}
+
 .history-table-wrap {
   width: 100%;
   max-width: 100%;
@@ -928,6 +949,34 @@ dialog::backdrop {
 
   .app-header h2 {
     font-size: 34px;
+  }
+
+  .trend-panel {
+    padding: 16px;
+  }
+
+  .trend-panel .panel-header {
+    display: grid;
+    grid-template-columns: 44px minmax(0, 1fr);
+    gap: 14px;
+    margin-bottom: 12px;
+  }
+
+  .trend-panel .panel-header h2 {
+    max-width: none;
+    font-size: 24px;
+    line-height: 1.05;
+  }
+
+  #weight-trend-note {
+    justify-self: end;
+    max-width: 100%;
+    font-size: 18px;
+    text-align: right;
+  }
+
+  canvas {
+    height: 260px;
   }
 
   .dashboard-grid {
