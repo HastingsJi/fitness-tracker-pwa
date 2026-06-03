@@ -1,11 +1,20 @@
 import { createServer } from "node:http";
-import { readFile } from "node:fs/promises";
+import { watch } from "node:fs";
+import { mkdir, readFile } from "node:fs/promises";
 import { extname, join, normalize } from "node:path";
+import { DatabaseSync } from "node:sqlite";
 import { fileURLToPath } from "node:url";
 
 const rootDir = fileURLToPath(new URL("..", import.meta.url));
+await loadLocalEnv();
+
 const port = Number(process.env.PORT || 8080);
 const host = process.env.HOST || "0.0.0.0";
+const isDevServer = process.env.DEV_SERVER === "1";
+const openaiApiKey = process.env.OPENAI_API_KEY || "";
+const openaiModel = process.env.OPENAI_MODEL || "gpt-4.1-mini";
+const dataDir = process.env.DATA_DIR || (process.env.NODE_ENV === "production" ? "/data" : join(rootDir, "data"));
+const dbPath = process.env.DATABASE_PATH || join(dataDir, isDevServer ? "fitness.dev.db" : "fitness.db");
 const maxBodyBytes = Number(process.env.MAX_BODY_BYTES || 6 * 1024 * 1024);
 const allowedOrigins = (process.env.ALLOWED_ORIGINS || "")
   .split(",")
@@ -14,6 +23,8 @@ const allowedOrigins = (process.env.ALLOWED_ORIGINS || "")
 const rateWindowMs = 60_000;
 const maxRequestsPerWindow = Number(process.env.RATE_LIMIT_PER_MINUTE || 60);
 const rateBuckets = new Map();
+const reloadClients = new Set();
+const db = await openDatabase();
 
 const foodDatabase = [
   { name: "鸡蛋", aliases: ["egg", "鸡蛋", "蛋"], unit: "个", calories: 70, protein: 6, carbs: 0.6, fat: 5 },
@@ -43,6 +54,27 @@ const mimeTypes = {
   ".svg": "image/svg+xml; charset=utf-8"
 };
 
+async function loadLocalEnv() {
+  try {
+    const raw = await readFile(join(rootDir, ".env"), "utf8");
+    for (const line of raw.split(/\r?\n/)) {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith("#")) continue;
+
+      const separatorIndex = trimmed.indexOf("=");
+      if (separatorIndex === -1) continue;
+
+      const key = trimmed.slice(0, separatorIndex).trim();
+      const value = trimmed.slice(separatorIndex + 1).trim().replace(/^["']|["']$/g, "");
+      if (key && process.env[key] === undefined) {
+        process.env[key] = value;
+      }
+    }
+  } catch (error) {
+    if (error.code !== "ENOENT") throw error;
+  }
+}
+
 createServer(async (req, res) => {
   try {
     applySecurityHeaders(res);
@@ -59,6 +91,21 @@ createServer(async (req, res) => {
       return;
     }
 
+    if (isDevServer && req.url === "/__dev/reload") {
+      handleReloadStream(req, res);
+      return;
+    }
+
+    if (isDevServer && req.url.startsWith("/__dev/clear")) {
+      sendDevClearPage(res);
+      return;
+    }
+
+    if (req.url === "/api/state") {
+      await handleState(req, res);
+      return;
+    }
+
     if (req.url === "/api/analyze-meal-text" || req.url === "/api/analyze-meal-photo") {
       await handleAnalyze(req, res);
       return;
@@ -70,8 +117,17 @@ createServer(async (req, res) => {
     sendJson(req, res, error.status || 500, { error: error.message || "server_error" });
   }
 }).listen(port, host, () => {
-  console.log(`Fitness tracker listening on ${port}`);
+  console.log(`Fitness tracker listening on http://${host}:${port}`);
+  if (isDevServer) console.log("Dev reload enabled");
+  console.log(`SQLite persistence at ${dbPath}`);
 });
+
+if (isDevServer) {
+  const watchedFiles = ["index.html", "styles.css", "app.js", "manifest.json", "service-worker.js"];
+  for (const file of watchedFiles) {
+    watch(join(rootDir, file), { persistent: false }, () => notifyReloadClients(file));
+  }
+}
 
 async function handleAnalyze(req, res) {
   if (req.method !== "POST") {
@@ -88,8 +144,67 @@ async function handleAnalyze(req, res) {
   const text = String(body.text || "");
   const correction = String(body.correction || "");
   const hasPhoto = Boolean(body.photo);
-  const draft = createAnalysisDraft(text, hasPhoto, correction);
+  const draft = await createAnalysisDraft(text, hasPhoto, correction, body.photo);
   sendJson(req, res, 200, draft);
+}
+
+async function handleState(req, res) {
+  if (req.method === "GET") {
+    sendJson(req, res, 200, readStoredState());
+    return;
+  }
+
+  if (req.method === "PUT") {
+    if (!checkRateLimit(req)) {
+      sendJson(req, res, 429, { error: "rate_limited" });
+      return;
+    }
+
+    const body = await readJsonBody(req);
+    const state = normalizeStoredState(body.state);
+    writeStoredState(state);
+    sendJson(req, res, 200, { ok: true, updatedAt: new Date().toISOString() });
+    return;
+  }
+
+  sendJson(req, res, 405, { error: "method_not_allowed" });
+}
+
+async function openDatabase() {
+  await mkdir(dataDir, { recursive: true });
+  const database = new DatabaseSync(dbPath);
+  database.exec(`
+    PRAGMA journal_mode = WAL;
+    CREATE TABLE IF NOT EXISTS app_state (
+      id TEXT PRIMARY KEY,
+      state_json TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+  `);
+  return database;
+}
+
+function readStoredState() {
+  const row = db.prepare("SELECT state_json, updated_at FROM app_state WHERE id = ?").get("default");
+  if (!row) return { state: null, updatedAt: null };
+  return { state: JSON.parse(row.state_json), updatedAt: row.updated_at };
+}
+
+function writeStoredState(state) {
+  db.prepare(`
+    INSERT INTO app_state (id, state_json, updated_at)
+    VALUES (?, ?, ?)
+    ON CONFLICT(id) DO UPDATE SET
+      state_json = excluded.state_json,
+      updated_at = excluded.updated_at
+  `).run("default", JSON.stringify(state), new Date().toISOString());
+}
+
+function normalizeStoredState(state) {
+  if (!state || typeof state !== "object" || Array.isArray(state)) {
+    throw Object.assign(new Error("invalid_state"), { status: 400 });
+  }
+  return state;
 }
 
 async function serveStatic(req, res) {
@@ -111,25 +226,99 @@ async function serveStatic(req, res) {
   }
 
   try {
-    const data = await readFile(filePath);
+    let data = await readFile(filePath);
     const ext = extname(filePath);
+    if (isDevServer && ext === ".html") {
+      data = injectDevReload(data);
+    }
     res.writeHead(200, {
-      "Cache-Control": ext === ".html" ? "no-cache" : "public, max-age=3600",
+      "Cache-Control": isDevServer ? "no-store" : ext === ".html" ? "no-cache" : "public, max-age=3600",
       "Content-Type": mimeTypes[ext] || "application/octet-stream"
     });
     if (req.method !== "HEAD") res.end(data);
     else res.end();
   } catch {
-    const index = await readFile(join(rootDir, "index.html"));
+    let index = await readFile(join(rootDir, "index.html"));
+    if (isDevServer) index = injectDevReload(index);
     res.writeHead(200, {
-      "Cache-Control": "no-cache",
+      "Cache-Control": isDevServer ? "no-store" : "no-cache",
       "Content-Type": "text/html; charset=utf-8"
     });
     res.end(index);
   }
 }
 
-function createAnalysisDraft(text, hasPhoto, correction = "") {
+function handleReloadStream(req, res) {
+  writeCors(req, res);
+  res.writeHead(200, {
+    "Cache-Control": "no-cache, no-transform",
+    "Connection": "keep-alive",
+    "Content-Type": "text/event-stream; charset=utf-8"
+  });
+  res.write("event: ready\ndata: connected\n\n");
+  reloadClients.add(res);
+  req.on("close", () => reloadClients.delete(res));
+}
+
+function notifyReloadClients(file) {
+  for (const client of reloadClients) {
+    client.write(`event: reload\ndata: ${file}\n\n`);
+  }
+}
+
+function injectDevReload(data) {
+  const html = data.toString("utf8");
+  const script = `
+    <script>
+      window.__FITNESS_DEV__ = true;
+      if ("caches" in window) {
+        caches.keys().then((keys) => Promise.all(keys.map((key) => caches.delete(key))));
+      }
+      new EventSource("/__dev/reload").addEventListener("reload", () => location.reload());
+    </script>`;
+  return Buffer.from(html.replace("</head>", `${script}\n  </head>`));
+}
+
+function sendDevClearPage(res) {
+  res.writeHead(200, {
+    "Cache-Control": "no-store",
+    "Content-Type": "text/html; charset=utf-8",
+    "Clear-Site-Data": '"cache"'
+  });
+  res.end(`<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Reset dev cache</title>
+  </head>
+  <body>
+    <p>Resetting local dev cache...</p>
+    <script>
+      Promise.all([
+        "serviceWorker" in navigator
+          ? navigator.serviceWorker.getRegistrations().then((items) => Promise.all(items.map((item) => item.unregister())))
+          : Promise.resolve(),
+        "caches" in window
+          ? caches.keys().then((keys) => Promise.all(keys.map((key) => caches.delete(key))))
+          : Promise.resolve()
+      ]).finally(() => {
+        location.replace("/?dev=" + Date.now());
+      });
+    </script>
+  </body>
+</html>`);
+}
+
+async function createAnalysisDraft(text, hasPhoto, correction = "", photo = "") {
+  if (openaiApiKey) {
+    try {
+      return await createOpenAIAnalysisDraft(text, hasPhoto, correction, photo);
+    } catch (error) {
+      console.error("OpenAI meal analysis failed", error);
+    }
+  }
+
   const combinedText = [text, correction].filter(Boolean).join(" ");
   const estimate = estimateFromText(combinedText);
   const hasFoodMatch = estimate.matched.length > 0;
@@ -144,11 +333,125 @@ function createAnalysisDraft(text, hasPhoto, correction = "") {
     protein: round(fallback.protein),
     carbs: round(fallback.carbs),
     fat: round(fallback.fat),
+    fiber: 0,
+    sodium: 0,
+    potassium: 0,
+    calcium: 0,
+    iron: 0,
     message: hasFoodMatch
       ? "我先按这些食物估算。你可以继续更正份量或食材。"
       : hasPhoto
         ? "我先按照片生成一个粗略草稿。你可以补充食材和份量。"
-        : "我需要更多食物信息才能估算。"
+      : "我需要更多食物信息才能估算。"
+  };
+}
+
+async function createOpenAIAnalysisDraft(text, hasPhoto, correction, photo) {
+  const combinedText = [text, correction].filter(Boolean).join("\n更正：").trim();
+  const content = [
+    {
+      type: "input_text",
+      text: [
+        "请分析用户实际吃掉的食物和份量，估算热量和三大营养素。",
+        "如果信息不足，请给一个保守估算，并在 message 里说明需要用户确认的地方。",
+        "所有数值用 kcal 或 g。不要输出 markdown，只返回符合 schema 的 JSON。",
+        `用户文字：${combinedText || "(没有文字，可能只有照片)"}`,
+        `是否有照片：${hasPhoto ? "是" : "否"}`
+      ].join("\n")
+    }
+  ];
+
+  if (hasPhoto && typeof photo === "string" && photo.startsWith("data:image/")) {
+    content.push({
+      type: "input_image",
+      image_url: photo,
+      detail: "low"
+    });
+  }
+
+  const response = await fetch("https://api.openai.com/v1/responses", {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${openaiApiKey}`,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      model: openaiModel,
+      instructions: [
+        "你是一个谨慎的营养记录助手。",
+        "目标是帮用户生成可编辑的餐食草稿，而不是医疗建议。",
+        "识别食物时保留不确定性：不确定就写进 message。",
+        "foods 使用短标签，例如 鸡胸肉 150g、米饭 200g、鸡蛋 2个。",
+        "calories、protein、carbs、fat、fiber、sodium、potassium、calcium、iron 必须是非负数字。"
+      ].join("\n"),
+      input: [{ role: "user", content }],
+      text: {
+        format: {
+          type: "json_schema",
+          name: "meal_analysis",
+          strict: true,
+          schema: mealAnalysisSchema
+        }
+      }
+    })
+  });
+
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(payload.error?.message || "openai_request_failed");
+  }
+
+  const outputText = payload.output_text || readResponseOutputText(payload);
+  const parsed = JSON.parse(outputText);
+  return normalizeOpenAIAnalysis(parsed, combinedText, hasPhoto);
+}
+
+const mealAnalysisSchema = {
+  type: "object",
+  additionalProperties: false,
+  required: ["text", "foods", "calories", "protein", "carbs", "fat", "fiber", "sodium", "potassium", "calcium", "iron", "message"],
+  properties: {
+    text: { type: "string" },
+    foods: {
+      type: "array",
+      items: { type: "string" }
+    },
+    calories: { type: "number" },
+    protein: { type: "number" },
+    carbs: { type: "number" },
+    fat: { type: "number" },
+    fiber: { type: "number" },
+    sodium: { type: "number" },
+    potassium: { type: "number" },
+    calcium: { type: "number" },
+    iron: { type: "number" },
+    message: { type: "string" }
+  }
+};
+
+function readResponseOutputText(payload) {
+  return (payload.output || [])
+    .flatMap((item) => item.content || [])
+    .filter((item) => item.type === "output_text")
+    .map((item) => item.text)
+    .join("");
+}
+
+function normalizeOpenAIAnalysis(parsed, text, hasPhoto) {
+  const foods = Array.isArray(parsed.foods) ? parsed.foods.filter(Boolean).map(String) : [];
+  return {
+    text: String(parsed.text || text || (hasPhoto ? "照片餐食" : "")).trim(),
+    foods,
+    calories: Math.max(0, Math.round(Number(parsed.calories) || 0)),
+    protein: round(Math.max(0, Number(parsed.protein) || 0)),
+    carbs: round(Math.max(0, Number(parsed.carbs) || 0)),
+    fat: round(Math.max(0, Number(parsed.fat) || 0)),
+    fiber: round(Math.max(0, Number(parsed.fiber) || 0)),
+    sodium: round(Math.max(0, Number(parsed.sodium) || 0)),
+    potassium: round(Math.max(0, Number(parsed.potassium) || 0)),
+    calcium: round(Math.max(0, Number(parsed.calcium) || 0)),
+    iron: round(Math.max(0, Number(parsed.iron) || 0)),
+    message: String(parsed.message || "我先生成了一个餐食估算，请确认食材和份量。")
   };
 }
 

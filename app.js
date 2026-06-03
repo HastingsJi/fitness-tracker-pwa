@@ -1,6 +1,13 @@
 const storageKey = "fitness-tracker-v2";
+const isDevServer = Boolean(window.__FITNESS_DEV__);
 
-if ("serviceWorker" in navigator) {
+if (isDevServer && "serviceWorker" in navigator) {
+  navigator.serviceWorker.getRegistrations().then((registrations) => {
+    registrations.forEach((registration) => registration.unregister());
+  });
+}
+
+if (!isDevServer && "serviceWorker" in navigator) {
   window.addEventListener("load", () => {
     navigator.serviceWorker.register("./service-worker.js").catch(() => {
       // The app still works without offline caching.
@@ -31,6 +38,8 @@ const state = loadState();
 let activeDate = todayKey();
 let pendingPhoto = "";
 let pendingAnalysis = null;
+let saveTimer = null;
+let isHydratingState = false;
 
 const els = {
   date: document.querySelector("#entry-date"),
@@ -55,6 +64,8 @@ const els = {
   history: document.querySelector("#history-table"),
   todayCalories: document.querySelector("#today-calories"),
   todayProtein: document.querySelector("#today-protein"),
+  todayCarbs: document.querySelector("#today-carbs"),
+  todayFat: document.querySelector("#today-fat"),
   latestWeight: document.querySelector("#latest-weight"),
   calorieRing: document.querySelector("#calorie-ring"),
   caloriePercent: document.querySelector("#calorie-percent"),
@@ -66,18 +77,27 @@ const els = {
   fatProgress: document.querySelector("#fat-progress-label"),
   dashboardCalories: document.querySelector("#dashboard-calories"),
   dashboardProtein: document.querySelector("#dashboard-protein"),
+  dashboardCarbs: document.querySelector("#dashboard-carbs"),
+  dashboardFat: document.querySelector("#dashboard-fat"),
   dashboardWeight: document.querySelector("#dashboard-weight"),
   dashboardCalorieGoal: document.querySelector("#dashboard-calorie-goal"),
   dashboardProteinGoal: document.querySelector("#dashboard-protein-goal"),
+  dashboardCarbsGoal: document.querySelector("#dashboard-carbs-goal"),
+  dashboardFatGoal: document.querySelector("#dashboard-fat-goal"),
   dashboardWeightGoal: document.querySelector("#dashboard-weight-goal"),
   calorieGoalDisplay: document.querySelector("#calorie-goal-display"),
   proteinGoalDisplay: document.querySelector("#protein-goal-display"),
+  carbsGoalDisplay: document.querySelector("#carbs-goal-display"),
+  fatGoalDisplay: document.querySelector("#fat-goal-display"),
   weightGoalDisplay: document.querySelector("#weight-goal-display"),
   goalsDialog: document.querySelector("#goals-dialog"),
   goalsForm: document.querySelector("#goals-form"),
   goalCalories: document.querySelector("#goal-calories-input"),
   goalProtein: document.querySelector("#goal-protein-input"),
+  goalCarbs: document.querySelector("#goal-carbs-input"),
+  goalFat: document.querySelector("#goal-fat-input"),
   goalWeight: document.querySelector("#goal-weight-input"),
+  microList: document.querySelector("#micro-list"),
   goalSetupForm: document.querySelector("#goal-setup-form"),
   profileAge: document.querySelector("#profile-age"),
   profileSex: document.querySelector("#profile-sex"),
@@ -110,6 +130,15 @@ function defaultState() {
     goals: {
       calories: 2200,
       protein: 140,
+      carbs: 260,
+      fat: 70,
+      micros: {
+        fiber: 30,
+        sodium: 2300,
+        potassium: 3400,
+        calcium: 1000,
+        iron: 8
+      },
       targetWeight: 70
     },
     days: {}
@@ -118,14 +147,71 @@ function defaultState() {
 
 function loadState() {
   try {
-    return JSON.parse(localStorage.getItem(storageKey)) || defaultState();
+    return normalizeState(JSON.parse(localStorage.getItem(storageKey)) || defaultState());
   } catch {
     return defaultState();
   }
 }
 
+function normalizeState(saved) {
+  const defaults = defaultState();
+  return {
+    ...defaults,
+    ...saved,
+    profile: { ...defaults.profile, ...(saved.profile || {}) },
+    goals: {
+      ...defaults.goals,
+      ...(saved.goals || {}),
+      micros: { ...defaults.goals.micros, ...(saved.goals?.micros || {}) }
+    },
+    days: saved.days || {}
+  };
+}
+
 function saveState() {
   localStorage.setItem(storageKey, JSON.stringify(state));
+  if (!isHydratingState) scheduleRemoteSave();
+}
+
+function hasLocalData() {
+  return Object.keys(state.days || {}).length > 0 || Boolean(state.profile.weight || state.profile.age);
+}
+
+function scheduleRemoteSave() {
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => {
+    syncStateToServer().catch(() => {
+      // Local storage remains the offline fallback when the server is unreachable.
+    });
+  }, 250);
+}
+
+async function hydrateStateFromServer() {
+  const response = await fetch("/api/state");
+  if (!response.ok) throw new Error("state_load_failed");
+  const payload = await response.json();
+
+  if (payload.state) {
+    isHydratingState = true;
+    Object.assign(state, normalizeState(payload.state));
+    localStorage.setItem(storageKey, JSON.stringify(state));
+    isHydratingState = false;
+    render();
+    return;
+  }
+
+  if (hasLocalData()) {
+    await syncStateToServer();
+  }
+}
+
+async function syncStateToServer() {
+  const response = await fetch("/api/state", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ state })
+  });
+  if (!response.ok) throw new Error("state_save_failed");
 }
 
 function todayKey() {
@@ -160,10 +246,25 @@ function sumMeals(day) {
       calories: total.calories + numberValue(meal.calories),
       protein: total.protein + numberValue(meal.protein),
       carbs: total.carbs + numberValue(meal.carbs),
-      fat: total.fat + numberValue(meal.fat)
+      fat: total.fat + numberValue(meal.fat),
+      fiber: total.fiber + numberValue(meal.fiber),
+      sodium: total.sodium + numberValue(meal.sodium),
+      potassium: total.potassium + numberValue(meal.potassium),
+      calcium: total.calcium + numberValue(meal.calcium),
+      iron: total.iron + numberValue(meal.iron)
     }),
-    { calories: 0, protein: 0, carbs: 0, fat: 0 }
+    { calories: 0, protein: 0, carbs: 0, fat: 0, fiber: 0, sodium: 0, potassium: 0, calcium: 0, iron: 0 }
   );
+}
+
+function microTargets() {
+  return [
+    { key: "fiber", label: "膳食纤维", unit: "g" },
+    { key: "sodium", label: "钠", unit: "mg", limit: true },
+    { key: "potassium", label: "钾", unit: "mg" },
+    { key: "calcium", label: "钙", unit: "mg" },
+    { key: "iron", label: "铁", unit: "mg" }
+  ];
 }
 
 function bmiCategory(bmi) {
@@ -216,6 +317,7 @@ function calculateGoalPlan(profile) {
   if (adjustedForFloor) targetCalories = calorieFloor;
 
   const proteinGoal = Math.round(Math.max(1.6 * targetWeight, 1.2 * weight));
+  const macroGoals = calculateMacroGoals(targetCalories, proteinGoal);
   const reachDate = weeks ? addWeeks(new Date(), weeks) : null;
   const directionMismatch =
     (mode === "lose" && direction >= 0) ||
@@ -234,10 +336,22 @@ function calculateGoalPlan(profile) {
     maintenance,
     targetCalories,
     proteinGoal,
+    carbsGoal: macroGoals.carbs,
+    fatGoal: macroGoals.fat,
     weeks,
     reachDate,
     adjustedForFloor,
     directionMismatch
+  };
+}
+
+function calculateMacroGoals(calories, protein) {
+  const proteinCalories = protein * 4;
+  const fatCalories = Math.max(calories * 0.25, 45 * 9);
+  const carbsCalories = Math.max(0, calories - proteinCalories - fatCalories);
+  return {
+    carbs: Math.max(1, Math.round(carbsCalories / 4)),
+    fat: Math.max(1, Math.round(fatCalories / 9))
   };
 }
 
@@ -322,7 +436,7 @@ function renderGoalSetupResult(plan) {
       <article>
         <span>建议每日热量</span>
         <strong>${plan.targetCalories} kcal</strong>
-        <small>蛋白质 ${plan.proteinGoal} g / 天</small>
+        <small>P ${plan.proteinGoal}g · C ${plan.carbsGoal}g · F ${plan.fatGoal}g</small>
       </article>
       <article>
         <span>目标时间</span>
@@ -339,6 +453,8 @@ function renderGoalSetupResult(plan) {
   document.querySelector("#apply-plan-button").addEventListener("click", () => {
     state.goals.calories = plan.targetCalories;
     state.goals.protein = plan.proteinGoal;
+    state.goals.carbs = plan.carbsGoal;
+    state.goals.fat = plan.fatGoal;
     state.goals.targetWeight = plan.targetWeight;
     state.profile = readProfileForm();
     saveState();
@@ -381,6 +497,11 @@ async function createAnalysisDraft(text, photo, correction = "") {
       protein: serverDraft.protein,
       carbs: serverDraft.carbs,
       fat: serverDraft.fat,
+      fiber: serverDraft.fiber || 0,
+      sodium: serverDraft.sodium || 0,
+      potassium: serverDraft.potassium || 0,
+      calcium: serverDraft.calcium || 0,
+      iron: serverDraft.iron || 0,
       messages: [{ role: "assistant", text: serverDraft.message }]
     };
   }
@@ -416,6 +537,11 @@ function createLocalAnalysisDraft(text, photo, correction = "") {
     protein: round(fallback.protein),
     carbs: round(fallback.carbs),
     fat: round(fallback.fat),
+    fiber: 0,
+    sodium: 0,
+    potassium: 0,
+    calcium: 0,
+    iron: 0,
     messages: [
       {
         role: "assistant",
@@ -449,6 +575,9 @@ function renderAnalysis() {
       <article><span>蛋白质</span><strong>${pendingAnalysis.protein || 0}</strong><small>g</small></article>
       <article><span>碳水</span><strong>${pendingAnalysis.carbs || 0}</strong><small>g</small></article>
       <article><span>脂肪</span><strong>${pendingAnalysis.fat || 0}</strong><small>g</small></article>
+    </div>
+    <div class="analysis-micros">
+      ${microTargets().map((micro) => `<span>${micro.label} ${round(pendingAnalysis[micro.key] || 0)}${micro.unit}</span>`).join("")}
     </div>
     <div class="food-chips">
       ${(pendingAnalysis.foods.length ? pendingAnalysis.foods : ["待确认"]).map((food) => `<span>${escapeHtml(food)}</span>`).join("")}
@@ -499,12 +628,18 @@ function render() {
 function renderGoals() {
   els.calorieGoalDisplay.textContent = state.goals.calories;
   els.proteinGoalDisplay.textContent = state.goals.protein;
+  els.carbsGoalDisplay.textContent = state.goals.carbs;
+  els.fatGoalDisplay.textContent = state.goals.fat;
   els.weightGoalDisplay.textContent = state.goals.targetWeight;
   els.dashboardCalorieGoal.textContent = state.goals.calories;
   els.dashboardProteinGoal.textContent = state.goals.protein;
+  els.dashboardCarbsGoal.textContent = state.goals.carbs;
+  els.dashboardFatGoal.textContent = state.goals.fat;
   els.dashboardWeightGoal.textContent = state.goals.targetWeight;
   els.goalCalories.value = state.goals.calories;
   els.goalProtein.value = state.goals.protein;
+  els.goalCarbs.value = state.goals.carbs;
+  els.goalFat.value = state.goals.fat;
   els.goalWeight.value = state.goals.targetWeight;
 }
 
@@ -518,14 +653,18 @@ function renderProgress() {
   const totals = sumMeals(day);
   const caloriePercent = Math.min(160, Math.round((totals.calories / state.goals.calories) * 100) || 0);
   const proteinPercent = Math.min(100, (totals.protein / state.goals.protein) * 100 || 0);
-  const carbsPercent = Math.min(100, (totals.carbs / 300) * 100 || 0);
-  const fatPercent = Math.min(100, (totals.fat / 90) * 100 || 0);
+  const carbsPercent = Math.min(100, (totals.carbs / state.goals.carbs) * 100 || 0);
+  const fatPercent = Math.min(100, (totals.fat / state.goals.fat) * 100 || 0);
 
   els.todayCalories.textContent = Math.round(totals.calories);
   els.todayProtein.textContent = `${round(totals.protein)}g`;
+  els.todayCarbs.textContent = `${round(totals.carbs)}g`;
+  els.todayFat.textContent = `${round(totals.fat)}g`;
   els.latestWeight.textContent = latestWeightLabel();
   els.dashboardCalories.textContent = Math.round(totals.calories);
   els.dashboardProtein.textContent = `${round(totals.protein)}g`;
+  els.dashboardCarbs.textContent = `${round(totals.carbs)}g`;
+  els.dashboardFat.textContent = `${round(totals.fat)}g`;
   els.dashboardWeight.textContent = latestWeightLabel();
   els.calorieRing.style.setProperty("--percent", `${Math.min(100, caloriePercent)}%`);
   els.caloriePercent.textContent = `${caloriePercent}%`;
@@ -533,8 +672,27 @@ function renderProgress() {
   els.carbsBar.style.width = `${carbsPercent}%`;
   els.fatBar.style.width = `${fatPercent}%`;
   els.proteinProgress.textContent = `${round(totals.protein)} / ${state.goals.protein}g`;
-  els.carbsProgress.textContent = `${round(totals.carbs)}g`;
-  els.fatProgress.textContent = `${round(totals.fat)}g`;
+  els.carbsProgress.textContent = `${round(totals.carbs)} / ${state.goals.carbs}g`;
+  els.fatProgress.textContent = `${round(totals.fat)} / ${state.goals.fat}g`;
+  renderMicros(totals);
+}
+
+function renderMicros(totals) {
+  els.microList.innerHTML = microTargets().map((micro) => {
+    const goal = numberValue(state.goals.micros[micro.key]);
+    const consumed = numberValue(totals[micro.key]);
+    const percent = goal ? Math.min(140, Math.round((consumed / goal) * 100)) : 0;
+    const label = micro.limit ? "上限" : "目标";
+    return `
+      <article class="micro-item">
+        <div>
+          <strong>${micro.label}</strong>
+          <span>${round(consumed)} / ${goal}${micro.unit} ${label}</span>
+        </div>
+        <div class="micro-bar"><span style="width: ${Math.min(100, percent)}%"></span></div>
+      </article>
+    `;
+  }).join("");
 }
 
 function latestWeightLabel() {
@@ -841,6 +999,11 @@ els.form.addEventListener("submit", (event) => {
     protein: numberValue(els.protein.value),
     carbs: numberValue(els.carbs.value),
     fat: numberValue(els.fat.value),
+    fiber: 0,
+    sodium: 0,
+    potassium: 0,
+    calcium: 0,
+    iron: 0,
     photo: pendingPhoto
   };
 
@@ -851,6 +1014,11 @@ els.form.addEventListener("submit", (event) => {
     protein: numberValue(els.protein.value || source.protein),
     carbs: numberValue(els.carbs.value || source.carbs),
     fat: numberValue(els.fat.value || source.fat),
+    fiber: numberValue(source.fiber),
+    sodium: numberValue(source.sodium),
+    potassium: numberValue(source.potassium),
+    calcium: numberValue(source.calcium),
+    iron: numberValue(source.iron),
     photo: source.photo || pendingPhoto,
     createdAt: new Date().toISOString()
   };
@@ -881,6 +1049,8 @@ document.querySelector("#edit-goals-button").addEventListener("click", () => {
 els.goalsForm.addEventListener("submit", () => {
   state.goals.calories = Math.max(1, Math.round(numberValue(els.goalCalories.value)));
   state.goals.protein = Math.max(1, Math.round(numberValue(els.goalProtein.value)));
+  state.goals.carbs = Math.max(1, Math.round(numberValue(els.goalCarbs.value)));
+  state.goals.fat = Math.max(1, Math.round(numberValue(els.goalFat.value)));
   state.goals.targetWeight = Math.max(1, decimalValue(els.goalWeight.value) || 1);
   saveState();
   render();
@@ -915,3 +1085,6 @@ document.querySelector("#reset-button").addEventListener("click", () => {
 document.querySelector("#export-button").addEventListener("click", exportCsv);
 
 render();
+hydrateStateFromServer().catch(() => {
+  // Keep the current local state if persistence is unavailable during development.
+});

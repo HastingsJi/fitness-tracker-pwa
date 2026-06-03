@@ -10,7 +10,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <link rel="manifest" href="manifest.json" />
     <link rel="apple-touch-icon" href="icons/icon-192.png" />
-    <link rel="stylesheet" href="styles.css?v=5" />
+    <link rel="stylesheet" href="styles.css?v=7" />
   </head>
   <body>
     <div class="app-shell">
@@ -19,7 +19,6 @@
           <div class="brand-mark">F</div>
           <div>
             <h1>Fitness</h1>
-            <p>无广告饮食追踪</p>
           </div>
         </div>
 
@@ -36,6 +35,14 @@
             <div>
               <dt>蛋白质</dt>
               <dd><span id="today-protein">0g</span></dd>
+            </div>
+            <div>
+              <dt>碳水</dt>
+              <dd><span id="today-carbs">0g</span></dd>
+            </div>
+            <div>
+              <dt>脂肪</dt>
+              <dd><span id="today-fat">0g</span></dd>
             </div>
             <div>
               <dt>体重</dt>
@@ -74,6 +81,16 @@
               <small>目标 <span id="dashboard-protein-goal">140</span> g</small>
             </article>
             <article class="metric-tile">
+              <span>碳水</span>
+              <strong><span id="dashboard-carbs">0g</span></strong>
+              <small>目标 <span id="dashboard-carbs-goal">260</span> g</small>
+            </article>
+            <article class="metric-tile">
+              <span>脂肪</span>
+              <strong><span id="dashboard-fat">0g</span></strong>
+              <small>目标 <span id="dashboard-fat-goal">70</span> g</small>
+            </article>
+            <article class="metric-tile">
               <span>最新体重</span>
               <strong id="dashboard-weight">--</strong>
               <small>目标 <span id="dashboard-weight-goal">70.0</span> kg</small>
@@ -103,18 +120,26 @@
                 <div>
                   <div class="progress-label">
                     <span>碳水</span>
-                    <strong id="carbs-progress-label">0g</strong>
+                    <strong id="carbs-progress-label">0 / 260g</strong>
                   </div>
                   <div class="bar"><span id="carbs-bar"></span></div>
                 </div>
                 <div>
                   <div class="progress-label">
                     <span>脂肪</span>
-                    <strong id="fat-progress-label">0g</strong>
+                    <strong id="fat-progress-label">0 / 70g</strong>
                   </div>
                   <div class="bar"><span id="fat-bar"></span></div>
                 </div>
               </div>
+            </section>
+
+            <section class="panel">
+              <div class="panel-header">
+                <h2>微量元素</h2>
+                <span class="muted">每日推荐</span>
+              </div>
+              <div class="micro-list" id="micro-list"></div>
             </section>
 
             <section class="panel">
@@ -311,6 +336,14 @@
                 <dd><span id="protein-goal-display">140</span> g</dd>
               </div>
               <div>
+                <dt>碳水</dt>
+                <dd><span id="carbs-goal-display">260</span> g</dd>
+              </div>
+              <div>
+                <dt>脂肪</dt>
+                <dd><span id="fat-goal-display">70</span> g</dd>
+              </div>
+              <div>
                 <dt>目标体重</dt>
                 <dd><span id="weight-goal-display">70.0</span> kg</dd>
               </div>
@@ -335,6 +368,14 @@
           <input id="goal-protein-input" min="1" type="number" />
         </label>
         <label>
+          <span>碳水 g</span>
+          <input id="goal-carbs-input" min="1" type="number" />
+        </label>
+        <label>
+          <span>脂肪 g</span>
+          <input id="goal-fat-input" min="1" type="number" />
+        </label>
+        <label>
           <span>目标体重 kg</span>
           <input id="goal-weight-input" min="1" step="any" type="number" />
         </label>
@@ -342,6 +383,6 @@
       </form>
     </dialog>
 
-    <script src="app.js?v=9"></script>
+    <script src="app.js?v=12"></script>
   </body>
 </html>

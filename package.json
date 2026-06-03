@@ -4,6 +4,9 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "dev": "HOST=127.0.0.1 PORT=8789 DEV_SERVER=1 node server/index.js",
+    "dev:lan": "HOST=0.0.0.0 PORT=8789 DEV_SERVER=1 node server/index.js",
+    "dev:lan:fresh": "HOST=0.0.0.0 PORT=8791 DEV_SERVER=1 node server/index.js",
     "start": "node server/index.js",
     "check": "node --check app.js && node --check service-worker.js && node --check server/index.js"
   },

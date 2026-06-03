@@ -38,6 +38,7 @@ button {
 .app-shell {
   display: grid;
   grid-template-columns: 280px minmax(0, 1fr);
+  padding-bottom: 86px;
   min-height: 100vh;
 }
 
@@ -186,19 +187,33 @@ dd {
 }
 
 .nav-tabs {
+  position: fixed;
+  z-index: 20;
+  right: max(16px, env(safe-area-inset-right));
+  bottom: max(14px, env(safe-area-inset-bottom));
+  left: max(16px, env(safe-area-inset-left));
   display: grid;
+  grid-template-columns: repeat(5, 1fr);
   gap: 8px;
-  margin-top: auto;
+  width: min(720px, calc(100vw - 32px));
+  margin: 0 auto;
+  padding: 7px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(16px);
 }
 
 .nav-tab {
   width: 100%;
-  padding: 12px 14px;
+  min-height: 46px;
+  padding: 8px 10px;
   border: 1px solid transparent;
   border-radius: 8px;
   background: transparent;
   color: var(--muted);
-  text-align: left;
+  text-align: center;
   font-weight: 750;
 }
 
@@ -220,7 +235,7 @@ dd {
 
 .dashboard-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 14px;
 }
 
@@ -352,6 +367,21 @@ textarea:focus {
 .analysis-macros strong {
   font-size: 22px;
   line-height: 1;
+}
+
+.analysis-micros {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.analysis-micros span {
+  padding: 6px 9px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 750;
 }
 
 .food-chips {
@@ -538,6 +568,42 @@ textarea:focus {
 .progress-list {
   display: grid;
   gap: 16px;
+}
+
+.micro-list {
+  display: grid;
+  gap: 12px;
+}
+
+.micro-item {
+  display: grid;
+  gap: 8px;
+}
+
+.micro-item div:first-child {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.micro-item strong {
+  color: var(--ink);
+}
+
+.micro-bar {
+  overflow: hidden;
+  height: 9px;
+  border-radius: 999px;
+  background: #edf0eb;
+}
+
+.micro-bar span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--accent-2);
 }
 
 .progress-label {
@@ -746,36 +812,28 @@ dialog::backdrop {
 
 @media (max-width: 920px) {
   .app-shell {
-    grid-template-columns: 1fr;
+    display: flex;
+    flex-direction: column;
   }
 
   .sidebar {
+    order: 2;
     position: static;
     height: auto;
     padding: 18px;
+    border-right: 0;
+    border-top: 1px solid var(--line);
+    background: transparent;
+    backdrop-filter: none;
   }
 
-  .nav-tabs {
-    position: fixed;
-    z-index: 10;
-    right: 12px;
-    bottom: 12px;
-    left: 12px;
-    grid-template-columns: repeat(5, 1fr);
-    gap: 4px;
-    margin: 0;
-    padding: 6px;
-    border: 1px solid var(--line);
-    border-radius: 8px;
-    background: rgba(255, 255, 255, 0.94);
-    box-shadow: var(--shadow);
-    backdrop-filter: blur(16px);
+  main {
+    order: 1;
   }
 
   .nav-tab {
     min-height: 44px;
     padding: 6px 4px;
-    text-align: center;
     font-size: 12px;
   }
 
@@ -793,7 +851,11 @@ dialog::backdrop {
   }
 
   .dashboard-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .metric-tile {
+    min-height: 118px;
   }
 
   .result-grid {
@@ -804,6 +866,19 @@ dialog::backdrop {
 @media (max-width: 620px) {
   .app-header h2 {
     font-size: 34px;
+  }
+
+  .dashboard-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .metric-tile {
+    min-height: 108px;
+    padding: 14px;
+  }
+
+  .metric-tile strong {
+    font-size: 24px;
   }
 
 
