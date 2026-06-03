@@ -41,6 +41,7 @@ let pendingPhoto = "";
 let pendingAnalysis = null;
 let saveTimer = null;
 let isHydratingState = false;
+let passcodePromptPromise = null;
 
 const els = {
   date: document.querySelector("#entry-date"),
@@ -241,31 +242,45 @@ function apiFetch(url, options = {}) {
 }
 
 function authPrompt() {
-  return localStorage.getItem(passcodeStorageKey) ? "Passcode 不正确，请重新输入" : "请输入 passcode";
+  const hadPasscode = Boolean(localStorage.getItem(passcodeStorageKey));
+  if (hadPasscode) localStorage.removeItem(passcodeStorageKey);
+  return {
+    message: hadPasscode ? "Passcode 不正确，请重新输入" : "请输入 passcode",
+    showError: hadPasscode
+  };
 }
 
-function requestPasscode(message = "请输入 passcode") {
-  return new Promise((resolve) => {
+function requestPasscode(prompt = {}) {
+  if (passcodePromptPromise) return passcodePromptPromise;
+
+  const normalizedPrompt = typeof prompt === "string" ? { message: prompt, showError: false } : prompt;
+  const message = normalizedPrompt.message || "请输入 passcode";
+
+  passcodePromptPromise = new Promise((resolve) => {
     els.unlockError.textContent = message;
-    els.unlockError.hidden = true;
+    els.unlockError.hidden = !normalizedPrompt.showError;
     els.passcodeInput.value = localStorage.getItem(passcodeStorageKey) || "";
-    els.unlockDialog.showModal();
+    if (!els.unlockDialog.open) els.unlockDialog.showModal();
 
     const handleSubmit = (event) => {
       event.preventDefault();
       const passcode = els.passcodeInput.value.trim();
       if (!passcode) {
+        els.unlockError.textContent = "请输入 passcode";
         els.unlockError.hidden = false;
         return;
       }
       localStorage.setItem(passcodeStorageKey, passcode);
       els.unlockForm.removeEventListener("submit", handleSubmit);
       els.unlockDialog.close();
+      passcodePromptPromise = null;
       resolve();
     };
 
     els.unlockForm.addEventListener("submit", handleSubmit);
   });
+
+  return passcodePromptPromise;
 }
 
 function todayKey() {
