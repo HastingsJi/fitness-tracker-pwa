@@ -559,8 +559,16 @@ function estimateFromText(text) {
 
 async function createAnalysisDraft(text, photos, correction = "") {
   const normalizedPhotos = normalizePhotos(photos);
-  const serverDraft = await requestMealAnalysis(text, normalizedPhotos, correction).catch(() => null);
+  const serverDraft = await requestMealAnalysis(text, normalizedPhotos, correction).catch((error) => ({ error }));
   if (serverDraft) {
+    if (serverDraft.error) {
+      const localDraft = createLocalAnalysisDraft(text, normalizedPhotos, correction);
+      return {
+        ...localDraft,
+        warning: serverDraft.error.message || localDraft.warning
+      };
+    }
+
     return {
       text: serverDraft.text,
       photo: primaryPhoto(normalizedPhotos),
@@ -595,7 +603,13 @@ async function requestMealAnalysis(text, photos, correction = "") {
     await requestPasscode(authPrompt());
     return requestMealAnalysis(text, normalizedPhotos, correction);
   }
-  if (!response.ok) throw new Error("analysis_failed");
+  if (!response.ok) {
+    const payload = await response.json().catch(() => ({}));
+    if (response.status === 413) {
+      throw new Error("照片太大，AI 没有收到图片。请少选几张，或重新选择较小的照片。");
+    }
+    throw new Error(payload.message || payload.error || "AI 分析失败，当前显示本地粗略估算。");
+  }
   return response.json();
 }
 
@@ -1022,10 +1036,42 @@ function resetMealInputs() {
 
 function readFileAsDataUrl(file) {
   return new Promise((resolve, reject) => {
+    if (!file.type.startsWith("image/")) {
+      reject(new Error("unsupported_file"));
+      return;
+    }
+
     const reader = new FileReader();
-    reader.addEventListener("load", () => resolve(String(reader.result)));
+    reader.addEventListener("load", () => {
+      compressImageDataUrl(String(reader.result)).then(resolve).catch(() => resolve(String(reader.result)));
+    });
     reader.addEventListener("error", () => reject(reader.error));
     reader.readAsDataURL(file);
+  });
+}
+
+function compressImageDataUrl(dataUrl) {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    image.addEventListener("load", () => {
+      const maxSide = 1280;
+      const scale = Math.min(1, maxSide / Math.max(image.naturalWidth, image.naturalHeight));
+      const width = Math.max(1, Math.round(image.naturalWidth * scale));
+      const height = Math.max(1, Math.round(image.naturalHeight * scale));
+      const canvas = document.createElement("canvas");
+      canvas.width = width;
+      canvas.height = height;
+      const context = canvas.getContext("2d");
+      if (!context) {
+        resolve(dataUrl);
+        return;
+      }
+
+      context.drawImage(image, 0, 0, width, height);
+      resolve(canvas.toDataURL("image/jpeg", 0.78));
+    });
+    image.addEventListener("error", reject);
+    image.src = dataUrl;
   });
 }
 
