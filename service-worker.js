@@ -1,4 +1,4 @@
-const cacheName = "fitness-pwa-v35";
+const cacheName = "fitness-pwa-v36";
 const appShell = [
   "./",
   "./index.html",
@@ -30,6 +30,15 @@ self.addEventListener("activate", (event) => {
 
 self.addEventListener("fetch", (event) => {
   if (event.request.method !== "GET") return;
+
+  // Never cache API responses — always hit the network so persisted state
+  // (meals, weight, etc.) is fresh on every load. Caching GET /api/state
+  // made saves "disappear" on reopen because the stale cache was served.
+  const url = new URL(event.request.url);
+  if (url.pathname.startsWith("/api/")) {
+    event.respondWith(fetch(event.request));
+    return;
+  }
 
   event.respondWith(
     caches.match(event.request).then((cached) => {
