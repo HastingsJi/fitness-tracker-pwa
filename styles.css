@@ -1020,6 +1020,13 @@ th {
   font-size: 13px;
 }
 
+.history-meals {
+  max-width: 320px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
 .food-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));

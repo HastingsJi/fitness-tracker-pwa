@@ -1225,14 +1225,14 @@ function renderHistory() {
     .sort(([a], [b]) => b.localeCompare(a))
     .map(([date, day]) => {
       const totals = sumMeals(day);
-      const mealText = day.meals.map((meal) => meal.text).filter(Boolean).join("；");
+      const mealText = day.meals.map((meal) => mealSummary(meal)).filter(Boolean).join("；");
       return `
         <tr>
           <td>${date}</td>
           <td>${day.weight ? `${day.weight} kg` : "--"}</td>
           <td>${Math.round(totals.calories)}</td>
           <td>${round(totals.protein)}g</td>
-          <td>${escapeHtml(mealText || "--")}</td>
+          <td class="history-meals" title="${escapeHtml(mealText)}">${escapeHtml(mealText || "--")}</td>
         </tr>
       `;
     });
