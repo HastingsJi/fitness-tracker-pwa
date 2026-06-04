@@ -7,3 +7,11 @@ test-results/
 playwright-report/
 .claude/
 .DS_Store
+
+# Capacitor — generated web bundle and iOS build artifacts
+www/
+ios/App/Pods/
+ios/App/App/public/
+ios/build/
+ios/DerivedData/
+ios/.DS_Store

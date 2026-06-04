@@ -2,13 +2,24 @@ const storageKey = "fitness-tracker-v2";
 const passcodeStorageKey = "fitness-tracker-passcode";
 const isDevServer = Boolean(window.__FITNESS_DEV__);
 
+// When wrapped as a native app (Capacitor) the page is served from a local
+// origin (capacitor://localhost), so API calls must target the remote server.
+// In the browser/PWA the app is same-origin with the server, so stay relative.
+const remoteApiBase = "https://fitness-tracker-pwa-hastingsji.fly.dev";
+const isNativeApp =
+  location.protocol === "capacitor:" ||
+  location.protocol === "ionic:" ||
+  Boolean(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
+const apiBase = isNativeApp ? remoteApiBase : "";
+
 if (isDevServer && "serviceWorker" in navigator) {
   navigator.serviceWorker.getRegistrations().then((registrations) => {
     registrations.forEach((registration) => registration.unregister());
   });
 }
 
-if (!isDevServer && "serviceWorker" in navigator) {
+// Skip the service worker in dev and in the native shell (assets are bundled).
+if (!isDevServer && !isNativeApp && "serviceWorker" in navigator) {
   window.addEventListener("load", () => {
     navigator.serviceWorker.register("./service-worker.js").catch(() => {
       // The app still works without offline caching.
@@ -308,7 +319,7 @@ function apiHeaders(extra = {}) {
 }
 
 function apiFetch(url, options = {}) {
-  return fetch(url, {
+  return fetch(apiBase + url, {
     ...options,
     headers: apiHeaders(options.headers || {})
   });

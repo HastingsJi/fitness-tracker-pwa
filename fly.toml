@@ -9,7 +9,7 @@ primary_region = "sjc"
   PORT = "8080"
   DATA_DIR = "/data"
   RATE_LIMIT_PER_MINUTE = "60"
-  ALLOWED_ORIGINS = "https://fitness-tracker-pwa-hastingsji.fly.dev,https://hastingsji.github.io"
+  ALLOWED_ORIGINS = "https://fitness-tracker-pwa-hastingsji.fly.dev,https://hastingsji.github.io,capacitor://localhost,http://localhost"
 
 [mounts]
   source = "fitness_data"

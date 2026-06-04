@@ -9,12 +9,18 @@
     "dev:lan:fresh": "HOST=0.0.0.0 PORT=8791 DEV_SERVER=1 node server/index.js",
     "start": "node server/index.js",
     "check": "node --check app.js && node --check service-worker.js && node --check server/index.js",
-    "test:ui": "playwright test"
+    "test:ui": "playwright test",
+    "cap:copy": "node scripts/copy-web.mjs",
+    "cap:sync": "npm run cap:copy && cap sync ios",
+    "cap:ios": "npm run cap:sync && cap open ios"
   },
   "engines": {
     "node": ">=22"
   },
   "devDependencies": {
+    "@capacitor/cli": "^8.4.0",
+    "@capacitor/core": "^8.4.0",
+    "@capacitor/ios": "^8.4.0",
     "@playwright/test": "^1.60.0"
   }
 }
