@@ -124,3 +124,70 @@ test("meal logging accepts multiple photos from the picker", async ({ page }) =>
   await expect(page.locator("#photo-preview img")).toHaveCount(2);
   await expectNoHorizontalOverflow(page);
 });
+
+test("a saved meal can be reopened in the editor and overwritten", async ({ page }) => {
+  // Keep the test independent of any server-persisted state.
+  await page.route("**/api/state", async (route) => {
+    if (route.request().method() === "PUT") {
+      await route.fulfill({ contentType: "application/json", body: JSON.stringify({ ok: true }) });
+    } else {
+      await route.fulfill({ contentType: "application/json", body: JSON.stringify({}) });
+    }
+  });
+  await page.route("**/api/analyze-meal-text", async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        text: "午餐：鸡胸肉150g",
+        foods: ["鸡胸肉 150g"],
+        items: [{ name: "鸡胸肉", amount: "150g", calories: 248, protein: 46.5, carbs: 0, fat: 5.4 }],
+        calories: 480,
+        protein: 50.9,
+        carbs: 50.4,
+        fat: 5.8,
+        fiber: 0,
+        sodium: 0,
+        potassium: 0,
+        calcium: 0,
+        iron: 0,
+        source: "ai",
+        warning: "",
+        message: "请确认食物和份量。"
+      })
+    });
+  });
+
+  // Start from a clean slate: the beforeEach navigation already hydrated
+  // any server state into localStorage before these routes existed, so
+  // wipe storage and reload with the mocked (empty) server in place.
+  await page.addInitScript(() => localStorage.clear());
+  await page.goto("/?v=playwright");
+
+  // Create and save a meal.
+  await page.getByRole("button", { name: "记录", exact: true }).click();
+  await page.locator("#meal-text").fill("午餐：鸡胸肉150g");
+  await page.getByRole("button", { name: "分析餐食" }).click();
+  await expect(page.locator('[data-adjustment="calories"]')).toHaveValue("480");
+  await page.getByRole("button", { name: "确认并保存餐食" }).click();
+
+  const meal = page.locator("#meal-list .meal-item");
+  await expect(meal).toHaveCount(1);
+  await expect(meal.locator(".meal-meta")).toContainText("480 kcal");
+
+  // Reopen it in the editor.
+  await meal.getByRole("button", { name: "编辑记录" }).click();
+  await expect(page.getByText("正在编辑已保存的餐食")).toBeVisible();
+  await expect(page.locator("#meal-text")).toHaveValue("午餐：鸡胸肉150g");
+  await expect(page.locator('[data-adjustment="calories"]')).toHaveValue("480");
+  const saveEdit = page.getByRole("button", { name: "保存修改" });
+  await expect(saveEdit).toBeVisible();
+
+  // Edit a macro and save — it overwrites instead of adding a duplicate.
+  await page.locator('[data-adjustment="calories"]').fill("600");
+  await page.locator('[data-adjustment="calories"]').blur();
+  await saveEdit.click();
+
+  await expect(page.locator("#meal-list .meal-item")).toHaveCount(1);
+  await expect(page.locator("#meal-list .meal-meta")).toContainText("600 kcal");
+  await expectNoHorizontalOverflow(page);
+});

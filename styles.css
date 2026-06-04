@@ -383,12 +383,19 @@ textarea:focus {
 }
 
 .analysis-warning,
-.analysis-source {
+.analysis-source,
+.analysis-editing {
   padding: 10px 12px;
   border-radius: 8px;
   font-size: 13px;
   font-weight: 800;
   line-height: 1.4;
+}
+
+.analysis-editing {
+  border: 1px solid #cdd9f3;
+  background: #eef2fc;
+  color: #2f4a8a;
 }
 
 .analysis-warning {
@@ -939,11 +946,25 @@ textarea:focus {
   font-size: 13px;
 }
 
+.meal-actions {
+  display: grid;
+  gap: 4px;
+  justify-items: end;
+}
+
+.edit-meal,
 .delete-meal {
   border: 0;
   background: transparent;
-  color: var(--danger);
   font-weight: 850;
+}
+
+.edit-meal {
+  color: var(--accent);
+}
+
+.delete-meal {
+  color: var(--danger);
 }
 
 canvas {

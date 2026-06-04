@@ -39,6 +39,7 @@ const state = loadState();
 let activeDate = todayKey();
 let pendingPhotos = [];
 let pendingAnalysis = null;
+let editingMealId = null;
 let saveTimer = null;
 let isHydratingState = false;
 let passcodePromptPromise = null;
@@ -789,6 +790,7 @@ function renderAnalysis() {
 
   els.analysisPanel.hidden = false;
   els.confirmMeal.disabled = pendingAnalysis.isLoading || (!pendingAnalysis.text && !pendingAnalysis.photo && !normalizePhotos(pendingAnalysis.photos).length);
+  if (!pendingAnalysis.isLoading) els.confirmMeal.textContent = editingMealId ? "保存修改" : "确认并保存餐食";
   els.estimate.disabled = Boolean(pendingAnalysis.isLoading);
   els.sendCorrection.disabled = Boolean(pendingAnalysis.isLoading);
   els.correctionInput.disabled = Boolean(pendingAnalysis.isLoading);
@@ -805,6 +807,7 @@ function renderAnalysis() {
   const items = normalizeFoodItems(pendingAnalysis.items || pendingAnalysis.foods || []);
 
   els.analysisSummary.innerHTML = `
+    ${editingMealId ? `<div class="analysis-editing">正在编辑已保存的餐食</div>` : ""}
     ${
       pendingAnalysis.warning
         ? `<div class="analysis-warning">${escapeHtml(pendingAnalysis.warning)}</div>`
@@ -1103,11 +1106,54 @@ function renderMeals() {
             <div class="meal-title">${escapeHtml(meal.text || "未命名餐食")}</div>
             <div class="meal-meta">${Math.round(meal.calories)} kcal · P ${round(meal.protein)}g · C ${round(meal.carbs)}g · F ${round(meal.fat)}g</div>
           </div>
-          <button class="delete-meal" type="button" data-id="${meal.id}" aria-label="删除记录">删除</button>
+          <div class="meal-actions">
+            <button class="edit-meal" type="button" data-id="${meal.id}" aria-label="编辑记录">编辑</button>
+            <button class="delete-meal" type="button" data-id="${meal.id}" aria-label="删除记录">删除</button>
+          </div>
         </article>
       `
     )
     .join("");
+}
+
+function analysisFromMeal(meal) {
+  const photos = normalizePhotos(meal.photos || meal.photo);
+  const items = normalizeFoodItems(meal.items || []);
+  return {
+    text: meal.text || "",
+    photo: primaryPhoto(photos),
+    photos,
+    foods: items.map((item) => item.name),
+    items,
+    calories: numberValue(meal.calories),
+    protein: numberValue(meal.protein),
+    carbs: numberValue(meal.carbs),
+    fat: numberValue(meal.fat),
+    fiber: numberValue(meal.fiber),
+    sodium: numberValue(meal.sodium),
+    potassium: numberValue(meal.potassium),
+    calcium: numberValue(meal.calcium),
+    iron: numberValue(meal.iron),
+    source: meal.source || "saved",
+    warning: "",
+    corrections: [],
+    messages: [{ role: "assistant", text: "正在编辑这条已保存的餐食。可以直接改宏量、补充更正或重新分析，然后保存修改。" }]
+  };
+}
+
+function startEditingMeal(id) {
+  const meal = getDay().meals.find((item) => item.id === id);
+  if (!meal) return;
+
+  editingMealId = id;
+  pendingPhotos = normalizePhotos(meal.photos || meal.photo);
+  els.mealText.value = meal.text || "";
+  pendingAnalysis = analysisFromMeal(meal);
+
+  showView("log-view");
+  renderPhotoPreview();
+  renderAnalysis();
+  requestAnimationFrame(() => els.analysisPanel.scrollIntoView({ behavior: "smooth", block: "start" }));
 }
 
 function renderHistory() {
@@ -1245,6 +1291,7 @@ function resetMealInputs() {
   els.photoPreview.innerHTML = "";
   els.photoPreview.classList.remove("has-photo");
   pendingPhotos = [];
+  editingMealId = null;
   resetAnalysis();
 }
 
@@ -1327,6 +1374,7 @@ document.querySelectorAll("[data-view]").forEach((button) => {
 });
 
 els.quickAddMeal.addEventListener("click", () => {
+  if (editingMealId) resetMealInputs();
   showView("log-view");
   requestAnimationFrame(() => els.mealText.focus());
 });
@@ -1471,8 +1519,11 @@ els.form.addEventListener("submit", async (event) => {
   els.confirmMeal.disabled = true;
   els.confirmMeal.textContent = "保存中...";
 
+  const editingIndex = editingMealId ? day.meals.findIndex((item) => item.id === editingMealId) : -1;
+  const existingMeal = editingIndex >= 0 ? day.meals[editingIndex] : null;
+
   const meal = {
-    id: crypto.randomUUID(),
+    id: existingMeal ? existingMeal.id : crypto.randomUUID(),
     text: source.text || els.mealText.value.trim(),
     calories: numberValue(source.calories),
     protein: numberValue(source.protein),
@@ -1486,10 +1537,13 @@ els.form.addEventListener("submit", async (event) => {
     photo: primaryPhoto(storedPhotos),
     photos: storedPhotos,
     items: normalizeFoodItems(source.items || source.foods || []),
-    createdAt: new Date().toISOString()
+    createdAt: existingMeal?.createdAt || new Date().toISOString(),
+    ...(existingMeal ? { updatedAt: new Date().toISOString() } : {})
   };
 
-  if (meal.text || meal.calories || meal.photo) {
+  if (existingMeal) {
+    day.meals[editingIndex] = meal;
+  } else if (meal.text || meal.calories || meal.photo) {
     day.meals.push(meal);
   }
 
@@ -1500,7 +1554,11 @@ els.form.addEventListener("submit", async (event) => {
     render();
     showView("dashboard-view");
   } catch (error) {
-    day.meals = day.meals.filter((item) => item.id !== meal.id);
+    if (existingMeal) {
+      day.meals[editingIndex] = existingMeal;
+    } else {
+      day.meals = day.meals.filter((item) => item.id !== meal.id);
+    }
     els.confirmMeal.disabled = false;
     els.confirmMeal.textContent = previousButtonText;
     pendingAnalysis = {
@@ -1513,9 +1571,18 @@ els.form.addEventListener("submit", async (event) => {
 });
 
 els.meals.addEventListener("click", (event) => {
+  const editButton = event.target.closest(".edit-meal");
+  if (editButton) {
+    startEditingMeal(editButton.dataset.id);
+    return;
+  }
+
   const button = event.target.closest(".delete-meal");
   if (!button) return;
   const day = getDay();
+  if (editingMealId === button.dataset.id) {
+    resetMealInputs();
+  }
   day.meals = day.meals.filter((meal) => meal.id !== button.dataset.id);
   saveState();
   render();
