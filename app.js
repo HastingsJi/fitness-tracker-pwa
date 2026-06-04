@@ -1208,6 +1208,19 @@ els.date.addEventListener("change", () => {
   render();
 });
 
+// Desktop browsers don't open the calendar when the (chromeless) date
+// input is clicked, only via its native picker indicator which we hide.
+// Open it programmatically so the control works on desktop too.
+els.date.addEventListener("click", () => {
+  if (typeof els.date.showPicker === "function") {
+    try {
+      els.date.showPicker();
+    } catch (error) {
+      /* showPicker can throw without a user gesture; ignore */
+    }
+  }
+});
+
 els.weightForm.addEventListener("submit", (event) => {
   event.preventDefault();
   const value = decimalValue(els.weight.value);
