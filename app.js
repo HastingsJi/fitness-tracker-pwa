@@ -1150,7 +1150,7 @@ function renderMeals() {
               : `<div class="meal-thumb empty" aria-hidden="true">餐</div>`
           }
           <div>
-            <div class="meal-title">${escapeHtml(meal.text || "未命名餐食")}</div>
+            <div class="meal-title">${escapeHtml(mealSummary(meal))}</div>
             <div class="meal-meta">${Math.round(meal.calories)} kcal · P ${round(meal.protein)}g · C ${round(meal.carbs)}g · F ${round(meal.fat)}g</div>
           </div>
           <div class="meal-actions">
@@ -1161,6 +1161,23 @@ function renderMeals() {
       `
     )
     .join("");
+}
+
+// Concise food summary for the meal list — just the recognised food names,
+// so the card stays tidy instead of showing the long AI description.
+function mealSummary(meal) {
+  const names = normalizeFoodItems(meal.items || [])
+    .map((item) => item.name)
+    .filter(Boolean);
+  if (names.length) return names.join("、");
+
+  // No structured items (e.g. a quick text estimate): tidy the raw text by
+  // dropping an "估算：" prefix and parenthetical notes.
+  const tidy = (meal.text || "")
+    .replace(/^估算[:：]\s*/, "")
+    .replace(/[（(][^）)]*[）)]/g, "")
+    .trim();
+  return tidy || meal.text || "未命名餐食";
 }
 
 function analysisFromMeal(meal) {
