@@ -1413,14 +1413,18 @@ function compressImageDataUrl(dataUrl, options = {}) {
 }
 
 async function createStoredMealPhotos(photos) {
-  const primary = primaryPhoto(photos);
-  if (!primary) return [];
+  const normalized = normalizePhotos(photos).slice(0, 6);
+  const stored = [];
 
-  try {
-    return [await compressImageDataUrl(primary, { maxSide: 320, quality: 0.68 })];
-  } catch {
-    return [];
+  for (const photo of normalized) {
+    try {
+      stored.push(await compressImageDataUrl(photo, { maxSide: 320, quality: 0.68 }));
+    } catch {
+      // Skip a photo that fails to compress rather than dropping the rest.
+    }
   }
+
+  return stored;
 }
 
 function renderPhotoPreview() {
