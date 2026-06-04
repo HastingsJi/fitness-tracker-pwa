@@ -170,15 +170,25 @@ function normalizeState(saved) {
   };
 }
 
+function writeLocalState(stateForStorage) {
+  try {
+    localStorage.setItem(storageKey, JSON.stringify(stateForStorage));
+  } catch (error) {
+    // Quota exceeded (e.g. large photos mid-migration). The server remains
+    // the source of truth; localStorage is only the offline fallback.
+    console.warn("Local state write skipped", error);
+  }
+}
+
 function saveState() {
-  localStorage.setItem(storageKey, JSON.stringify(compactStateForPersistence(state)));
+  writeLocalState(compactStateForPersistence(state));
   if (!isHydratingState) scheduleRemoteSave();
 }
 
 async function saveStateNow() {
   const persistedState = compactStateForPersistence(state);
   Object.assign(state, normalizeState(persistedState));
-  localStorage.setItem(storageKey, JSON.stringify(persistedState));
+  writeLocalState(persistedState);
   if (isHydratingState) return;
   clearTimeout(saveTimer);
   await syncStateToServer();
@@ -186,11 +196,13 @@ async function saveStateNow() {
 
 function compactStateForPersistence(sourceState) {
   const compact = normalizeState(sourceState);
-  const maxStoredPhotoChars = 160_000;
 
+  // Normalize photo fields without ever dropping a photo by size. Oversized
+  // legacy photos are shrunk asynchronously by migrateOversizedPhotos();
+  // dropping them here permanently lost the user's thumbnails on sync.
   for (const day of Object.values(compact.days || {})) {
     day.meals = (day.meals || []).map((meal) => {
-      const photos = normalizePhotos(meal.photos || meal.photo).filter((photo) => photo.length <= maxStoredPhotoChars);
+      const photos = normalizePhotos(meal.photos || meal.photo);
       return {
         ...meal,
         photo: photos[0] || "",
@@ -200,6 +212,40 @@ function compactStateForPersistence(sourceState) {
   }
 
   return compact;
+}
+
+// Re-compress any stored photo that is larger than a thumbnail down to the
+// same 320px thumbnail new meals use. Recovers legacy full-size photos so
+// they render, and keeps localStorage / sync payloads small.
+async function migrateOversizedPhotos() {
+  const thumbnailMaxChars = 60_000;
+  let changed = false;
+
+  for (const day of Object.values(state.days || {})) {
+    for (const meal of day.meals || []) {
+      const photos = normalizePhotos(meal.photos || meal.photo);
+      const shrunk = [];
+      for (const photo of photos) {
+        if (photo.length > thumbnailMaxChars) {
+          try {
+            shrunk.push(await compressImageDataUrl(photo, { maxSide: 320, quality: 0.68 }));
+            changed = true;
+          } catch {
+            shrunk.push(photo);
+          }
+        } else {
+          shrunk.push(photo);
+        }
+      }
+      meal.photos = shrunk;
+      meal.photo = shrunk[0] || "";
+    }
+  }
+
+  if (changed) {
+    render();
+    await saveStateNow().catch((error) => console.warn("Photo migration save failed", error));
+  }
 }
 
 function hasLocalData() {
@@ -228,9 +274,10 @@ async function hydrateStateFromServer() {
   if (payload.state) {
     isHydratingState = true;
     Object.assign(state, compactStateForPersistence(payload.state));
-    localStorage.setItem(storageKey, JSON.stringify(state));
+    writeLocalState(state);
     isHydratingState = false;
     render();
+    migrateOversizedPhotos();
     return;
   }
 
