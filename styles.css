@@ -504,6 +504,50 @@ textarea:focus {
   white-space: nowrap;
 }
 
+.macro-card-editable {
+  display: grid;
+  gap: 6px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fbfcfa;
+  transition: border-color 160ms ease, box-shadow 160ms ease, background 160ms ease;
+}
+
+.macro-card-editable span,
+.macro-card-editable small {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.macro-card-editable span {
+  font-weight: 800;
+}
+
+.macro-card-editable input {
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font-size: 22px;
+  font-weight: 850;
+  line-height: 1;
+}
+
+.macro-card-editable input:focus {
+  box-shadow: none;
+}
+
+.macro-card-editable:not(.is-editing) input {
+  pointer-events: none;
+}
+
+.macro-card-editable.is-editing {
+  border-color: var(--accent);
+  background: #fff;
+  box-shadow: 0 0 0 3px rgba(22, 122, 104, 0.12);
+}
+
 .confirm-analysis-button {
   width: 100%;
   min-height: 48px;
@@ -1190,6 +1234,10 @@ dialog::backdrop {
 
   .loading-steps {
     grid-template-columns: 1fr;
+  }
+
+  .analysis-macros {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .meal-item {

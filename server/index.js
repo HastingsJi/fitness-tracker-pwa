@@ -412,6 +412,7 @@ async function createOpenAIAnalysisDraft(text, hasPhoto, correction, photos) {
         "识别食物时保留不确定性：不确定就写进 message。",
         "foods 使用短标签，例如 鸡胸肉 150g、米饭 200g、鸡蛋 2个。",
         "items 列出每一种你认为用户吃了的食物，包含 name、amount、calories、protein、carbs、fat，方便用户逐项确认。",
+        "如果用户提供了更正，必须完整采纳所有更正，并在 message 里具体说明当前草稿如何变化以及还有哪些不确定点；不要只说“已更新”。",
         "calories、protein、carbs、fat、fiber、sodium、potassium、calcium、iron 必须是非负数字。"
       ].join("\n"),
       input: [{ role: "user", content }],

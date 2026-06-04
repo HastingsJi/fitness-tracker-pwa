@@ -170,8 +170,35 @@ function normalizeState(saved) {
 }
 
 function saveState() {
-  localStorage.setItem(storageKey, JSON.stringify(state));
+  localStorage.setItem(storageKey, JSON.stringify(compactStateForPersistence(state)));
   if (!isHydratingState) scheduleRemoteSave();
+}
+
+async function saveStateNow() {
+  const persistedState = compactStateForPersistence(state);
+  Object.assign(state, normalizeState(persistedState));
+  localStorage.setItem(storageKey, JSON.stringify(persistedState));
+  if (isHydratingState) return;
+  clearTimeout(saveTimer);
+  await syncStateToServer();
+}
+
+function compactStateForPersistence(sourceState) {
+  const compact = normalizeState(sourceState);
+  const maxStoredPhotoChars = 160_000;
+
+  for (const day of Object.values(compact.days || {})) {
+    day.meals = (day.meals || []).map((meal) => {
+      const photos = normalizePhotos(meal.photos || meal.photo).filter((photo) => photo.length <= maxStoredPhotoChars);
+      return {
+        ...meal,
+        photo: photos[0] || "",
+        photos
+      };
+    });
+  }
+
+  return compact;
 }
 
 function hasLocalData() {
@@ -181,7 +208,8 @@ function hasLocalData() {
 function scheduleRemoteSave() {
   clearTimeout(saveTimer);
   saveTimer = setTimeout(() => {
-    syncStateToServer().catch(() => {
+    syncStateToServer().catch((error) => {
+      console.warn("Remote state sync failed", error);
       // Local storage remains the offline fallback when the server is unreachable.
     });
   }, 250);
@@ -198,7 +226,7 @@ async function hydrateStateFromServer() {
 
   if (payload.state) {
     isHydratingState = true;
-    Object.assign(state, normalizeState(payload.state));
+    Object.assign(state, compactStateForPersistence(payload.state));
     localStorage.setItem(storageKey, JSON.stringify(state));
     isHydratingState = false;
     render();
@@ -213,7 +241,7 @@ async function hydrateStateFromServer() {
 async function syncStateToServer() {
   const response = await apiFetch("/api/state", {
     method: "PUT",
-    body: JSON.stringify({ state })
+    body: JSON.stringify({ state: compactStateForPersistence(state) })
   });
   if (response.status === 401) {
     await requestPasscode(authPrompt());
@@ -561,10 +589,11 @@ function estimateFromText(text) {
 
 async function createAnalysisDraft(text, photos, correction = "") {
   const normalizedPhotos = normalizePhotos(photos);
-  const serverDraft = await requestMealAnalysis(text, normalizedPhotos, correction).catch((error) => ({ error }));
+  const correctionText = normalizeCorrections(correction).join("\n");
+  const serverDraft = await requestMealAnalysis(text, normalizedPhotos, correctionText).catch((error) => ({ error }));
   if (serverDraft) {
     if (serverDraft.error) {
-      const localDraft = createLocalAnalysisDraft(text, normalizedPhotos, correction);
+      const localDraft = createLocalAnalysisDraft(text, normalizedPhotos, correctionText);
       return {
         ...localDraft,
         warning: serverDraft.error.message || localDraft.warning
@@ -588,11 +617,12 @@ async function createAnalysisDraft(text, photos, correction = "") {
       iron: serverDraft.iron || 0,
       source: serverDraft.source || "ai",
       warning: serverDraft.warning || "",
+      corrections: normalizeCorrections(correction),
       messages: [{ role: "assistant", text: serverDraft.message }]
     };
   }
 
-  return createLocalAnalysisDraft(text, normalizedPhotos, correction);
+  return createLocalAnalysisDraft(text, normalizedPhotos, correctionText);
 }
 
 async function requestMealAnalysis(text, photos, correction = "") {
@@ -618,7 +648,8 @@ async function requestMealAnalysis(text, photos, correction = "") {
 
 function createLocalAnalysisDraft(text, photos, correction = "") {
   const normalizedPhotos = normalizePhotos(photos);
-  const combinedText = [text, correction].filter(Boolean).join(" ");
+  const corrections = normalizeCorrections(correction);
+  const combinedText = [text, ...corrections].filter(Boolean).join(" ");
   const estimate = estimateFromText(combinedText);
   const hasFoodMatch = estimate.matched.length > 0;
   const hasPhoto = normalizedPhotos.length > 0;
@@ -651,6 +682,7 @@ function createLocalAnalysisDraft(text, photos, correction = "") {
     iron: 0,
     source: "fallback",
     warning: "当前是本地粗略估算，没有调用 AI。",
+    corrections,
     messages: [
       {
         role: "assistant",
@@ -694,6 +726,26 @@ function withLoadingAnalysis(previous = null) {
       ? [...previous.messages, { role: "assistant", text: "正在更新分析..." }]
       : [{ role: "assistant", text: "正在识别食物和估算营养..." }]
   };
+}
+
+function normalizeCorrections(correction) {
+  if (Array.isArray(correction)) {
+    return correction.map((item) => String(item || "").trim()).filter(Boolean);
+  }
+
+  return String(correction || "")
+    .split(/\n+/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function assistantMessageFromDraft(draft) {
+  const message = draft.messages?.find((item) => item.role === "assistant")?.text;
+  if (message) return message;
+
+  const itemCount = normalizeFoodItems(draft.items || draft.foods || []).length;
+  const macros = `${Math.round(numberValue(draft.calories))} kcal · P ${round(numberValue(draft.protein))}g · C ${round(numberValue(draft.carbs))}g · F ${round(numberValue(draft.fat))}g`;
+  return itemCount ? `已更新为 ${itemCount} 项食物：${macros}。请再确认一次。` : "已更新草稿，请确认食物和份量。";
 }
 
 function normalizePhotos(photos) {
@@ -761,10 +813,10 @@ function renderAnalysis() {
           : ""
     }
     <div class="analysis-macros">
-      <article><span>热量</span><strong>${pendingAnalysis.calories || 0}</strong><small>kcal</small></article>
-      <article><span>蛋白质</span><strong>${pendingAnalysis.protein || 0}</strong><small>g</small></article>
-      <article><span>碳水</span><strong>${pendingAnalysis.carbs || 0}</strong><small>g</small></article>
-      <article><span>脂肪</span><strong>${pendingAnalysis.fat || 0}</strong><small>g</small></article>
+      ${renderEditableMacroCard("calories", "热量", "kcal", pendingAnalysis.calories, "numeric")}
+      ${renderEditableMacroCard("protein", "蛋白质", "g", pendingAnalysis.protein, "decimal")}
+      ${renderEditableMacroCard("carbs", "碳水", "g", pendingAnalysis.carbs, "decimal")}
+      ${renderEditableMacroCard("fat", "脂肪", "g", pendingAnalysis.fat, "decimal")}
     </div>
     <div class="analysis-micros">
       ${microTargets().map((micro) => `<span>${micro.label} ${round(pendingAnalysis[micro.key] || 0)}${micro.unit}</span>`).join("")}
@@ -782,6 +834,56 @@ function renderAnalysis() {
   els.analysisChat.innerHTML = pendingAnalysis.messages
     .map((message) => `<div class="chat-message ${message.role}">${escapeHtml(message.text)}</div>`)
     .join("");
+  bindEditableMacroCards();
+}
+
+function renderEditableMacroCard(key, label, unit, value, inputMode) {
+  return `
+    <label class="macro-card-editable" data-adjustment-card="${key}">
+      <span>${label}</span>
+      <input data-adjustment="${key}" inputmode="${inputMode}" min="0" step="${key === "calories" ? "1" : "0.1"}" type="number" value="${escapeHtml(value || 0)}" />
+      <small>${unit}</small>
+    </label>
+  `;
+}
+
+function formatMacroValue(key, value) {
+  return key === "calories" ? String(Math.round(numberValue(value))) : String(round(numberValue(value)));
+}
+
+function toggleMacroEditing(input, editing) {
+  const card = input.closest("[data-adjustment-card]");
+  if (!card) return;
+  card.classList.toggle("is-editing", editing);
+  if (!editing) input.value = formatMacroValue(input.dataset.adjustment, pendingAnalysis?.[input.dataset.adjustment]);
+}
+
+function commitMacroEditing(input) {
+  if (!pendingAnalysis || pendingAnalysis.isLoading) return;
+  updateManualAdjustment(input);
+  toggleMacroEditing(input, false);
+}
+
+function cancelMacroEditing(input) {
+  toggleMacroEditing(input, false);
+}
+
+function bindEditableMacroCards() {
+  els.analysisSummary.querySelectorAll("[data-adjustment]").forEach((input) => {
+    input.addEventListener("focus", () => toggleMacroEditing(input, true));
+    input.addEventListener("blur", () => commitMacroEditing(input));
+    input.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        input.blur();
+      }
+      if (event.key === "Escape") {
+        event.preventDefault();
+        cancelMacroEditing(input);
+        input.blur();
+      }
+    });
+  });
 }
 
 function renderAnalysisLoading() {
@@ -825,6 +927,21 @@ function renderFoodBreakdownItem(item) {
       <b>${Math.round(item.calories)} kcal</b>
     </article>
   `;
+}
+
+function updateManualAdjustment(input) {
+  if (!pendingAnalysis || pendingAnalysis.isLoading) return;
+
+  const key = input.dataset.adjustment;
+  if (!["calories", "protein", "carbs", "fat"].includes(key)) return;
+
+  const value = key === "calories"
+    ? Math.max(0, Math.round(numberValue(input.value)))
+    : round(Math.max(0, numberValue(input.value)));
+  pendingAnalysis[key] = value;
+
+  const macroValue = els.analysisSummary.querySelector(`[data-macro-value="${key}"]`);
+  if (macroValue) macroValue.textContent = value;
 }
 
 function resetAnalysis() {
@@ -1140,18 +1257,19 @@ function readFileAsDataUrl(file) {
 
     const reader = new FileReader();
     reader.addEventListener("load", () => {
-      compressImageDataUrl(String(reader.result)).then(resolve).catch(() => resolve(String(reader.result)));
+      compressImageDataUrl(String(reader.result), { maxSide: 1280, quality: 0.78 }).then(resolve).catch(() => resolve(String(reader.result)));
     });
     reader.addEventListener("error", () => reject(reader.error));
     reader.readAsDataURL(file);
   });
 }
 
-function compressImageDataUrl(dataUrl) {
+function compressImageDataUrl(dataUrl, options = {}) {
   return new Promise((resolve, reject) => {
     const image = new Image();
     image.addEventListener("load", () => {
-      const maxSide = 1280;
+      const maxSide = options.maxSide || 1280;
+      const quality = options.quality ?? 0.78;
       const scale = Math.min(1, maxSide / Math.max(image.naturalWidth, image.naturalHeight));
       const width = Math.max(1, Math.round(image.naturalWidth * scale));
       const height = Math.max(1, Math.round(image.naturalHeight * scale));
@@ -1165,11 +1283,22 @@ function compressImageDataUrl(dataUrl) {
       }
 
       context.drawImage(image, 0, 0, width, height);
-      resolve(canvas.toDataURL("image/jpeg", 0.78));
+      resolve(canvas.toDataURL("image/jpeg", quality));
     });
     image.addEventListener("error", reject);
     image.src = dataUrl;
   });
+}
+
+async function createStoredMealPhotos(photos) {
+  const primary = primaryPhoto(photos);
+  if (!primary) return [];
+
+  try {
+    return [await compressImageDataUrl(primary, { maxSide: 320, quality: 0.68 })];
+  } catch {
+    return [];
+  }
 }
 
 function renderPhotoPreview() {
@@ -1257,6 +1386,7 @@ els.sendCorrection.addEventListener("click", () => {
   if (!correction || !pendingAnalysis) return;
 
   const previousMessages = pendingAnalysis.messages;
+  const corrections = [...normalizeCorrections(pendingAnalysis.corrections), correction];
   pendingAnalysis = withLoadingAnalysis({
     ...pendingAnalysis,
     messages: [...previousMessages, { role: "user", text: correction }]
@@ -1264,13 +1394,14 @@ els.sendCorrection.addEventListener("click", () => {
   els.correctionInput.value = "";
   renderAnalysis();
 
-  createAnalysisDraft(els.mealText.value, pendingPhotos, correction).then((draft) => {
+  createAnalysisDraft(els.mealText.value, pendingPhotos, corrections).then((draft) => {
     pendingAnalysis = {
       ...draft,
+      corrections,
       messages: [
         ...previousMessages,
         { role: "user", text: correction },
-        { role: "assistant", text: "已按你的更正更新草稿。确认无误后再保存。" }
+        { role: "assistant", text: assistantMessageFromDraft(draft) }
       ]
     };
     renderAnalysis();
@@ -1286,6 +1417,11 @@ els.correctionInput.addEventListener("keydown", (event) => {
 
 els.resetAnalysis.addEventListener("click", resetAnalysis);
 
+els.analysisSummary.addEventListener("input", (event) => {
+  const input = event.target.closest("[data-adjustment]");
+  if (input) updateManualAdjustment(input);
+});
+
 els.photoInput.addEventListener("change", () => {
   const files = Array.from(els.photoInput.files || []);
   if (!files.length) return;
@@ -1297,7 +1433,7 @@ els.photoInput.addEventListener("change", () => {
   });
 });
 
-els.form.addEventListener("submit", (event) => {
+els.form.addEventListener("submit", async (event) => {
   event.preventDefault();
   const day = getDay();
 
@@ -1330,6 +1466,11 @@ els.form.addEventListener("submit", (event) => {
     photos: pendingPhotos
   };
 
+  const storedPhotos = await createStoredMealPhotos(source.photos || source.photo || pendingPhotos);
+  const previousButtonText = els.confirmMeal.textContent;
+  els.confirmMeal.disabled = true;
+  els.confirmMeal.textContent = "保存中...";
+
   const meal = {
     id: crypto.randomUUID(),
     text: source.text || els.mealText.value.trim(),
@@ -1342,8 +1483,8 @@ els.form.addEventListener("submit", (event) => {
     potassium: numberValue(source.potassium),
     calcium: numberValue(source.calcium),
     iron: numberValue(source.iron),
-    photo: source.photo || primaryPhoto(source.photos || pendingPhotos),
-    photos: normalizePhotos(source.photos || source.photo || pendingPhotos),
+    photo: primaryPhoto(storedPhotos),
+    photos: storedPhotos,
     items: normalizeFoodItems(source.items || source.foods || []),
     createdAt: new Date().toISOString()
   };
@@ -1352,10 +1493,23 @@ els.form.addEventListener("submit", (event) => {
     day.meals.push(meal);
   }
 
-  saveState();
-  resetMealInputs();
-  render();
-  showView("dashboard-view");
+  try {
+    await saveStateNow();
+    els.confirmMeal.textContent = previousButtonText;
+    resetMealInputs();
+    render();
+    showView("dashboard-view");
+  } catch (error) {
+    day.meals = day.meals.filter((item) => item.id !== meal.id);
+    els.confirmMeal.disabled = false;
+    els.confirmMeal.textContent = previousButtonText;
+    pendingAnalysis = {
+      ...pendingAnalysis,
+      warning: "保存失败，记录没有写入数据库。请确认 passcode 或稍后重试。"
+    };
+    renderAnalysis();
+    console.warn("Meal save failed", error);
+  }
 });
 
 els.meals.addEventListener("click", (event) => {

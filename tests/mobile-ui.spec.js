@@ -43,7 +43,10 @@ test("trend chart renders in a stable mobile frame", async ({ page }) => {
 });
 
 test("meal logging reveals nutrition fields only after analysis", async ({ page }) => {
+  const analysisRequests = [];
   await page.route("**/api/analyze-meal-text", async (route) => {
+    const payload = route.request().postDataJSON();
+    analysisRequests.push(payload);
     await new Promise((resolve) => setTimeout(resolve, 200));
     await route.fulfill({
       contentType: "application/json",
@@ -65,12 +68,14 @@ test("meal logging reveals nutrition fields only after analysis", async ({ page 
         iron: 0,
         source: "ai",
         warning: "",
-        message: "请确认食物和份量。"
+        message: payload.correction
+          ? `已采纳：${payload.correction}`
+          : "请确认食物和份量。"
       })
     });
   });
 
-  await page.getByRole("button", { name: "记录" }).click();
+  await page.getByRole("button", { name: "记录", exact: true }).click();
   await expect(page.locator("#macro-editor")).toHaveCount(0);
   await expect(page.locator("#food-photo")).toHaveAttribute("multiple", "");
 
@@ -81,14 +86,28 @@ test("meal logging reveals nutrition fields only after analysis", async ({ page 
   await expect(page.getByRole("button", { name: "分析餐食" })).toBeDisabled();
   await expect(page.locator("#calories-input")).toHaveCount(0);
   await expect(page.getByText("识别到的食物")).toBeVisible();
+  await page.locator('[data-adjustment="calories"]').fill("520");
+  await page.locator('[data-adjustment="calories"]').blur();
+  await expect(page.locator('[data-adjustment="calories"]')).toHaveValue("520");
   await expect(page.getByRole("button", { name: "重新开始" })).toBeVisible();
   await expect(page.getByRole("button", { name: "确认并保存餐食" })).toBeVisible();
+
+  await page.locator("#correction-input").fill("只有一个汉堡");
+  await page.getByRole("button", { name: "发送" }).click();
+  await expect(page.getByText("已采纳：只有一个汉堡")).toBeVisible();
+
+  await page.locator("#correction-input").fill("碳水只有15g");
+  await page.getByRole("button", { name: "发送" }).click();
+  await expect(page.getByText("已采纳：只有一个汉堡")).toBeVisible();
+  await expect(page.getByText("碳水只有15g")).toBeVisible();
+  expect(analysisRequests.at(-1)?.correction).toContain("只有一个汉堡");
+  expect(analysisRequests.at(-1)?.correction).toContain("碳水只有15g");
 
   await expectNoHorizontalOverflow(page);
 });
 
 test("meal logging accepts multiple photos from the picker", async ({ page }) => {
-  await page.getByRole("button", { name: "记录" }).click();
+  await page.getByRole("button", { name: "记录", exact: true }).click();
   await page.locator("#food-photo").setInputFiles([
     {
       name: "meal-1.png",
