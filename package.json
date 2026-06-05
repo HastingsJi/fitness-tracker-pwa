@@ -24,6 +24,7 @@
     "@playwright/test": "^1.60.0"
   },
   "dependencies": {
+    "@capacitor/keyboard": "^8.0.3",
     "@capacitor/status-bar": "^8.0.2"
   }
 }

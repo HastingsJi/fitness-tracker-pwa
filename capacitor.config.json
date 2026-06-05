@@ -5,5 +5,10 @@
   "backgroundColor": "#f6f7f2",
   "ios": {
     "backgroundColor": "#f6f7f2"
+  },
+  "plugins": {
+    "Keyboard": {
+      "resize": "native"
+    }
   }
 }
