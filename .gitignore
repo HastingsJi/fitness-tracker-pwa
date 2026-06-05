@@ -15,3 +15,6 @@ ios/App/App/public/
 ios/build/
 ios/DerivedData/
 ios/.DS_Store
+
+# shared demo video (served at /icons/demo.mp4, not source)
+icons/demo.mp4
