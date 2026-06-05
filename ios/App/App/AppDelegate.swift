@@ -47,3 +47,46 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     }
 
 }
+
+// Capacitor's WKWebView reports env(safe-area-inset-*) as 0, so feed the real
+// native safe-area insets to the web layer as CSS variables (--safe-top/-bottom).
+class MainViewController: CAPBridgeViewController {
+    private var observing = false
+
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        if !observing, let wv = webView {
+            // Don't let the scroll view shift content up for the safe area —
+            // the CSS padding (driven by --safe-top) is the sole control.
+            wv.scrollView.contentInsetAdjustmentBehavior = .never
+            wv.addObserver(self, forKeyPath: "loading", options: [.new], context: nil)
+            observing = true
+        }
+        applySafeAreaInsets()
+    }
+
+    deinit {
+        if observing { webView?.removeObserver(self, forKeyPath: "loading") }
+    }
+
+    // Inject once the page has finished loading so the variable lands on the
+    // real document (earlier injections hit a document that gets replaced).
+    override func observeValue(forKeyPath keyPath: String?, of object: Any?, change: [NSKeyValueChangeKey: Any]?, context: UnsafeMutableRawPointer?) {
+        if keyPath == "loading", let isLoading = change?[.newKey] as? Bool, isLoading == false {
+            applySafeAreaInsets()
+        }
+    }
+
+    override func viewSafeAreaInsetsDidChange() {
+        super.viewSafeAreaInsetsDidChange()
+        applySafeAreaInsets()
+    }
+
+    private func applySafeAreaInsets() {
+        let top = Int(view.safeAreaInsets.top)
+        let bottom = Int(view.safeAreaInsets.bottom)
+        let js = "document.documentElement.style.setProperty('--safe-top','\(top)px');"
+            + "document.documentElement.style.setProperty('--safe-bottom','\(bottom)px');"
+        webView?.evaluateJavaScript(js, completionHandler: nil)
+    }
+}

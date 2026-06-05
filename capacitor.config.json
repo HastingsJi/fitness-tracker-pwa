@@ -1,5 +1,9 @@
 {
   "appId": "com.hastingsji.fitness",
   "appName": "Fitness",
-  "webDir": "www"
+  "webDir": "www",
+  "backgroundColor": "#f6f7f2",
+  "ios": {
+    "backgroundColor": "#f6f7f2"
+  }
 }

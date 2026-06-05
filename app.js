@@ -27,6 +27,14 @@ if (!isDevServer && !isNativeApp && "serviceWorker" in navigator) {
   });
 }
 
+// In the native shell, stop the status bar from drawing over the WebView so the
+// header clears the notch (Capacitor's WKWebView can report env(safe-area) as 0).
+if (isNativeApp && window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.StatusBar) {
+  const statusBar = window.Capacitor.Plugins.StatusBar;
+  statusBar.setOverlaysWebView({ overlay: true }).catch(() => {});
+  statusBar.setStyle({ style: "LIGHT" }).catch(() => {}); // dark icons on the light background
+}
+
 const foodDatabase = [
   { name: "鸡蛋", aliases: ["egg", "鸡蛋", "蛋"], unit: "个", calories: 70, protein: 6, carbs: 0.6, fat: 5 },
   { name: "鸡胸肉", aliases: ["chicken", "鸡胸", "鸡胸肉"], unit: "100g", calories: 165, protein: 31, carbs: 0, fat: 3.6 },

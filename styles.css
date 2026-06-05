@@ -70,6 +70,9 @@ small {
 main {
   min-width: 0;
   padding: 28px;
+  /* Keep the header clear of the status bar / notch in the native shell.
+     --safe-top is injected natively (Capacitor); env() covers web/PWA. */
+  padding-top: calc(28px + var(--safe-top, env(safe-area-inset-top)));
 }
 
 .app-header {
@@ -198,7 +201,7 @@ dd {
   position: fixed;
   z-index: 20;
   right: max(16px, env(safe-area-inset-right));
-  bottom: max(14px, env(safe-area-inset-bottom));
+  bottom: max(14px, var(--safe-bottom, env(safe-area-inset-bottom)));
   left: max(16px, env(safe-area-inset-left));
   display: grid;
   grid-template-columns: repeat(5, 1fr);
@@ -1159,6 +1162,7 @@ dialog::backdrop {
 
   main {
     padding: 18px 18px 88px;
+    padding-top: calc(18px + var(--safe-top, env(safe-area-inset-top)));
   }
 
   .app-header {

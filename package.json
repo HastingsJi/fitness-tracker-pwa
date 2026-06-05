@@ -22,5 +22,8 @@
     "@capacitor/core": "^8.4.0",
     "@capacitor/ios": "^8.4.0",
     "@playwright/test": "^1.60.0"
+  },
+  "dependencies": {
+    "@capacitor/status-bar": "^8.0.2"
   }
 }
