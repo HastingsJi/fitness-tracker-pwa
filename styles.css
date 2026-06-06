@@ -335,6 +335,8 @@ select {
   background: #fbfcfa;
   color: var(--ink);
   outline: none;
+  /* 16px keeps iOS from auto-zooming (and stretching the page) on focus. */
+  font-size: 16px;
 }
 
 input,
